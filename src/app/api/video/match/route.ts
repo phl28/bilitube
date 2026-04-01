@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const youtubeInfo = extractYoutubeInfo(youtubeUrl);
     if (!youtubeInfo?.videoId) {
       return NextResponse.json(
-        { success: false, error: 'Invalid YouTube URL' },
+        { success: false, error: 'Invalid YouTube URL. Please paste a full YouTube link.' },
         { status: 400 }
       );
     }
@@ -110,10 +110,6 @@ export async function POST(request: NextRequest) {
 }
 
 function extractYoutubeInfo(url: string): { videoId: string; playlistId: string | null } | null {
-  if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
-    return { videoId: url, playlistId: null };
-  }
-
   try {
     const parsedUrl = new URL(url);
 

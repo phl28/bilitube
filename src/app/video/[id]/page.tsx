@@ -87,7 +87,7 @@ export default function VideoPage({ params }: VideoPageProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        <div className="text-muted">Loading...</div>
       </div>
     );
   }
@@ -95,7 +95,7 @@ export default function VideoPage({ params }: VideoPageProps) {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-red-600 dark:text-red-400">{error}</div>
+        <div className="text-accent">{error}</div>
       </div>
     );
   }
@@ -103,110 +103,106 @@ export default function VideoPage({ params }: VideoPageProps) {
   if (!match) return null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-          <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4">
-            <iframe
-              src={`https://www.youtube.com/embed/${match.youtubeVideo.id}`}
-              className="w-full h-full"
-              allowFullScreen
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            {match.youtubeVideo.title}
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
-            {match.youtubeVideo.channelTitle} • {formatViewCount(match.youtubeVideo.viewCount)} views
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Comments
-            </h2>
-            <div className="flex gap-2">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm"
-              >
-                <option value="top">Top</option>
-                <option value="new">Newest</option>
-                <option value="hot">Hot</option>
-              </select>
-              <button
-                onClick={refreshComments}
-                disabled={loadingComments}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded text-sm"
-              >
-                {loadingComments ? 'Loading...' : 'Refresh'}
-              </button>
+    <div className="max-w-[1280px] mx-auto px-6 py-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <div>
+            <div className="aspect-video bg-black rounded-xl overflow-hidden">
+              <iframe
+                src={`https://www.youtube.com/embed/${match.youtubeVideo.id}`}
+                className="w-full h-full"
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
             </div>
+            <h1 className="text-lg font-semibold mt-3 leading-snug">
+              {match.youtubeVideo.title}
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              {match.youtubeVideo.channelTitle} &middot; {formatViewCount(match.youtubeVideo.viewCount)} views
+            </p>
           </div>
 
-          <div className="space-y-6">
-            <CommentSection
-              title="YouTube Comments"
-              platform="youtube"
-              comments={youtubeComments}
-              totalCount={youtubeCommentTotal}
-              loading={loadingComments}
-            />
+          <div className="bg-surface rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold">Comments</h2>
+              <div className="flex gap-2">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none"
+                >
+                  <option value="top">Top</option>
+                  <option value="new">Newest</option>
+                  <option value="hot">Hot</option>
+                </select>
+                <button
+                  onClick={refreshComments}
+                  disabled={loadingComments}
+                  className="px-3 py-1.5 bg-surface-hover hover:bg-border disabled:opacity-40 text-foreground rounded-lg text-sm transition-colors"
+                >
+                  {loadingComments ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
 
-            {selectedBilibili && (
+            <div className="space-y-5">
               <CommentSection
-                title="Bilibili Comments"
-                platform="bilibili"
-                comments={bilibiliComments}
-                totalCount={bilibiliCommentTotal}
+                title="YouTube Comments"
+                platform="youtube"
+                comments={youtubeComments}
+                totalCount={youtubeCommentTotal}
                 loading={loadingComments}
               />
-            )}
+
+              {selectedBilibili && (
+                <CommentSection
+                  title="Bilibili Comments"
+                  platform="bilibili"
+                  comments={bilibiliComments}
+                  totalCount={bilibiliCommentTotal}
+                  loading={loadingComments}
+                />
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Bilibili Reuploads ({match.bilibiliReuploads.length})
-          </h2>
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold mb-3">
+              Bilibili Reuploads ({match.bilibiliReuploads.length})
+            </h2>
 
-          {match.bilibiliReuploads.length === 0 ? (
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
-              No Bilibili reuploads found.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {match.bilibiliReuploads.map((reupload) => (
-                <BilibiliCard
-                  key={reupload.video.bvid}
-                  reupload={reupload}
-                  isSelected={selectedBilibili === reupload.video.aid.toString()}
-                  onSelect={() => setSelectedBilibili(reupload.video.aid.toString())}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+            {match.bilibiliReuploads.length === 0 ? (
+              <p className="text-muted text-sm">No Bilibili reuploads found.</p>
+            ) : (
+              <div className="space-y-2">
+                {match.bilibiliReuploads.map((reupload) => (
+                  <BilibiliCard
+                    key={reupload.video.bvid}
+                    reupload={reupload}
+                    isSelected={selectedBilibili === reupload.video.aid.toString()}
+                    onSelect={() => setSelectedBilibili(reupload.video.aid.toString())}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            Match Info
-          </h3>
-          <dl className="text-sm space-y-1">
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Method</dt>
-              <dd className="text-gray-900 dark:text-white capitalize">{match.matchMethod}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Verified</dt>
-              <dd className="text-gray-900 dark:text-white">{match.verified ? 'Yes' : 'No'}</dd>
-            </div>
-          </dl>
+          <div className="bg-surface rounded-xl p-4">
+            <h3 className="text-sm font-semibold mb-2">Match Info</h3>
+            <dl className="text-sm space-y-1.5">
+              <div className="flex justify-between">
+                <dt className="text-muted">Method</dt>
+                <dd className="capitalize">{match.matchMethod}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted">Verified</dt>
+                <dd>{match.verified ? 'Yes' : 'No'}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       </div>
     </div>
@@ -231,21 +227,21 @@ function CommentSection({
 
   return (
     <div>
-      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+      <h3 className="text-sm font-medium text-muted mb-3 flex items-center gap-2">
         <span
           className={`w-2 h-2 rounded-full ${
-            platform === 'youtube' ? 'bg-red-500' : 'bg-blue-500'
+            platform === 'youtube' ? 'bg-red-500' : 'bg-sky-500'
           }`}
         />
         {title} ({displayedCount.toLocaleString()}{showingSubset ? ` total, showing ${comments.length.toLocaleString()}` : ''})
       </h3>
 
       {loading ? (
-        <div className="text-gray-500 text-sm">Loading comments...</div>
+        <div className="text-muted text-sm py-4">Loading comments...</div>
       ) : comments.length === 0 ? (
-        <div className="text-gray-500 text-sm">No comments available.</div>
+        <div className="text-muted text-sm py-4">No comments available.</div>
       ) : (
-        <div className="space-y-3 max-h-[600px] overflow-y-auto">
+        <div className="space-y-1 max-h-[600px] overflow-y-auto">
           {comments.map((comment) => (
             <CommentCard key={getId(comment)} comment={comment} platform={platform} />
           ))}
@@ -267,26 +263,26 @@ function CommentCard({
   const biliComment = !isYouTube ? (comment as BilibiliComment) : null;
 
   return (
-    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+    <div className="py-2.5">
       <div className="flex items-start gap-3">
         <img
-          src={isYouTube ? ytComment!.authorProfileImageUrl : biliComment!.avatar}
+          src={isYouTube ? ytComment!.authorProfileImageUrl : `/api/image?url=${encodeURIComponent(biliComment!.avatar)}`}
           alt=""
-          className="w-8 h-8 rounded-full"
+          className="w-8 h-8 rounded-full shrink-0"
         />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-sm text-gray-900 dark:text-white truncate">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="font-medium text-xs truncate">
               {isYouTube ? ytComment!.authorDisplayName : biliComment!.uname}
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-muted shrink-0">
               {formatTimeAgo(isYouTube ? ytComment!.publishedAt : new Date(biliComment!.ctime * 1000).toISOString())}
             </span>
           </div>
-          <p className="text-sm text-gray-700 dark:text-gray-300 break-words">
+          <p className="text-sm leading-relaxed break-words">
             {isYouTube ? ytComment!.textDisplay : biliComment!.message}
           </p>
-          <div className="mt-1 text-xs text-gray-500">
+          <div className="mt-1 text-xs text-muted">
             {formatLikeCount(isYouTube ? ytComment!.likeCount : biliComment!.like)} likes
           </div>
         </div>
@@ -306,10 +302,10 @@ function BilibiliCard({
 }) {
   return (
     <div
-      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+      className={`p-2.5 rounded-xl cursor-pointer transition-colors ${
         isSelected
-          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+          ? 'bg-surface-hover'
+          : 'hover:bg-surface'
       }`}
       onClick={onSelect}
     >
@@ -318,35 +314,36 @@ function BilibiliCard({
           <img
             src={`/api/image?url=${encodeURIComponent(reupload.video.thumbnailUrl)}`}
             alt=""
-            className="w-24 h-14 object-cover rounded"
+            className="w-[168px] h-[94px] object-cover rounded-lg shrink-0"
           />
         )}
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+          <h4 className="text-sm font-medium leading-snug line-clamp-2">
             {reupload.video.title}
           </h4>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted mt-1">
             {reupload.video.uploaderName}
           </p>
-          <div className="flex gap-3 mt-1 text-xs text-gray-500">
+          <div className="flex gap-2 mt-0.5 text-xs text-muted">
             <span>{formatViewCount(reupload.video.viewCount)} views</span>
+            <span>&middot;</span>
             <span>{reupload.video.commentCount} comments</span>
           </div>
+          <div className="mt-1.5 flex items-center gap-3">
+            <a
+              href={`https://www.bilibili.com/video/${reupload.video.bvid}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-accent hover:text-accent-hover"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Watch on Bilibili
+            </a>
+            <span className="text-xs text-muted">
+              {Math.round(reupload.matchConfidence * 100)}% match
+            </span>
+          </div>
         </div>
-      </div>
-      <div className="mt-2 flex items-center justify-between">
-        <a
-          href={`https://www.bilibili.com/video/${reupload.video.bvid}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-blue-600 hover:text-blue-700"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Watch on Bilibili →
-        </a>
-        <span className="text-xs text-gray-400">
-          {Math.round(reupload.matchConfidence * 100)}% match
-        </span>
       </div>
     </div>
   );

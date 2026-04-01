@@ -106,32 +106,28 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-        Admin Panel
-      </h1>
+    <div className="max-w-2xl mx-auto px-6 py-8">
+      <h1 className="text-xl font-bold mb-6">Admin Panel</h1>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Video Match Correction
-        </h2>
+      <div className="bg-surface rounded-xl p-5">
+        <h2 className="text-base font-semibold mb-4">Video Match Correction</h2>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              YouTube URL or ID
+            <label className="block text-sm text-muted mb-1.5">
+              YouTube URL
             </label>
             <input
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
               placeholder="https://www.youtube.com/watch?v=..."
-              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted/50 outline-none text-sm transition-colors focus:border-muted"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm text-muted mb-1.5">
               Bilibili BV ID (optional)
             </label>
             <input
@@ -139,42 +135,40 @@ export default function AdminPage() {
               value={bvid}
               onChange={(e) => setBvid(e.target.value)}
               placeholder="BV1xx411c7mD"
-              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted/50 outline-none text-sm transition-colors focus:border-muted"
             />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-1">
             <button
               onClick={handleAddMatch}
               disabled={loading || !youtubeUrl.trim()}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
             >
               {loading ? 'Adding...' : 'Add Match'}
             </button>
             <button
               onClick={handleRemoveMatch}
               disabled={loading || !youtubeUrl.trim()}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded"
+              className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
             >
               {loading ? 'Removing...' : 'Remove Match'}
             </button>
           </div>
 
           {result && (
-            <p className="text-green-600 dark:text-green-400">{result}</p>
+            <p className="text-emerald-500 text-sm">{result}</p>
           )}
           {error && (
-            <p className="text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-accent text-sm">{error}</p>
           )}
         </div>
       </div>
 
-      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          API Key
-        </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          The admin API key is stored in the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ADMIN_API_KEY</code> environment variable.
+      <div className="mt-6 bg-surface rounded-xl p-5">
+        <h2 className="text-base font-semibold mb-2">API Key</h2>
+        <p className="text-sm text-muted">
+          The admin API key is stored in the <code className="px-1.5 py-0.5 bg-surface-hover rounded text-xs">ADMIN_API_KEY</code> environment variable.
           You will be prompted to enter it when making changes.
         </p>
       </div>

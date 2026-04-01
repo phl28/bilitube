@@ -27,31 +27,22 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <header className="bg-white dark:bg-gray-800 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <a href="/" className="text-2xl font-bold text-gray-900 dark:text-white">
-                BiliTube
-              </a>
-              <nav className="flex gap-4">
-                <a
-                  href="/"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                >
-                  Home
-                </a>
-                <a
-                  href="/admin"
-                  className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                >
-                  Admin
-                </a>
-              </nav>
-            </div>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <header className="sticky top-0 z-50 bg-header-bg border-b border-border">
+          <div className="flex items-center h-14 px-6">
+            <a href="/" className="flex items-center gap-2 shrink-0">
+              <div className="w-7 h-7 rounded bg-accent flex items-center justify-center">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              </div>
+              <span className="text-lg font-semibold tracking-tight">
+                Bili<span className="text-accent">Tube</span>
+              </span>
+            </a>
           </div>
         </header>
-        <main className="flex-1 max-w-7xl mx-auto px-4 py-8 w-full">
+        <main className="flex-1 w-full">
           {children}
         </main>
       </body>

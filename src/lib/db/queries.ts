@@ -114,6 +114,71 @@ export async function addAdminCorrection(
   });
 }
 
+export async function getRecentMatches(limit: number = 12): Promise<VideoMatch[]> {
+  await initDatabase();
+
+  const result = await db.execute({
+    sql: `SELECT vm.*,
+            (SELECT COUNT(*) FROM bilibili_reuploads br WHERE br.youtube_id = vm.youtube_id) as reupload_count
+          FROM video_matches vm
+          ORDER BY vm.updated_at DESC
+          LIMIT ?`,
+    args: [limit],
+  });
+
+  const matches: VideoMatch[] = [];
+
+  for (const row of result.rows) {
+    const bilibiliResult = await db.execute({
+      sql: 'SELECT * FROM bilibili_reuploads WHERE youtube_id = ? ORDER BY views DESC',
+      args: [row.youtube_id as string],
+    });
+
+    const youtubeVideo: YouTubeVideo = {
+      id: row.youtube_id as string,
+      title: row.youtube_title as string,
+      description: '',
+      channelId: '',
+      channelTitle: row.youtube_channel as string,
+      playlistId: (row.youtube_playlist_id as string) || undefined,
+      playlistTitle: (row.youtube_playlist_title as string) || undefined,
+      tags: [],
+      thumbnailUrl: row.youtube_thumbnail as string,
+      durationSeconds: row.youtube_duration as number,
+      viewCount: row.youtube_views as number,
+      publishedAt: '',
+    };
+
+    const bilibiliReuploads: BilibiliReupload[] = bilibiliResult.rows.map((r) => ({
+      video: {
+        bvid: r.bvid as string,
+        aid: r.aid as number,
+        title: r.title as string,
+        description: '',
+        uploaderMid: 0,
+        uploaderName: r.uploader_name as string,
+        thumbnailUrl: r.thumbnail as string,
+        durationSeconds: r.duration as number,
+        viewCount: r.views as number,
+        commentCount: r.comments as number,
+        likeCount: r.likes as number,
+        publishedAtTimestamp: 0,
+      },
+      matchConfidence: r.match_confidence as number,
+      matchMethod: r.match_method as BilibiliReupload['matchMethod'],
+    }));
+
+    matches.push({
+      youtubeVideo,
+      bilibiliReuploads,
+      verified: row.verified === 1,
+      matchMethod: bilibiliReuploads[0]?.matchMethod || 'title',
+    });
+  }
+
+  return matches;
+}
+
 export async function getAdminCorrections(youtubeId: string) {
   await initDatabase();
 
