@@ -178,8 +178,8 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-4">
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 min-w-0">
+      <div className="relative">
+        <div className="lg:mr-[404px]">
           <div className="aspect-video bg-black rounded-xl overflow-hidden">
             <iframe
               src={`https://www.youtube.com/embed/${match.youtubeVideo.id}`}
@@ -190,7 +190,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           </div>
         </div>
 
-        <div className="lg:w-[380px] shrink-0 flex flex-col" style={{ maxHeight: 'calc((100vw - 380px - 48px - 24px) * 9 / 16)' }}>
+        <div className="mt-4 lg:mt-0 lg:absolute lg:top-0 lg:right-0 lg:bottom-0 lg:w-[380px] flex flex-col">
           <h2 className="text-base font-semibold mb-3 shrink-0">
             Bilibili Reuploads ({sortedReuploads.length})
           </h2>
@@ -235,7 +235,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         </p>
       </div>
 
-      <div className="bg-surface rounded-xl p-4 mt-3">
+      <div className="mt-6 border-t border-border pt-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold">Comments</h2>
           <div className="flex gap-2">
@@ -258,8 +258,8 @@ export default function VideoPage({ params }: VideoPageProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="max-h-[600px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
             <ThreadedCommentSection
               title="YouTube Comments"
               platform="youtube"
@@ -273,7 +273,7 @@ export default function VideoPage({ params }: VideoPageProps) {
           </div>
 
           {selectedBilibili && (
-            <div className="max-h-[600px] overflow-y-auto pr-1">
+            <div>
               <ThreadedCommentSection
                 title="Bilibili Comments"
                 platform="bilibili"
