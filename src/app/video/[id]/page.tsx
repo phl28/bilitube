@@ -24,7 +24,7 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [youtubeCommentTotal, setYoutubeCommentTotal] = useState(0);
   const [bilibiliCommentTotal, setBilibiliCommentTotal] = useState(0);
   const [youtubeNextPage, setYoutubeNextPage] = useState<string | undefined>();
-  const [bilibiliPage, setBilibiliPage] = useState(1);
+  const [bilibiliCursor, setBilibiliCursor] = useState<string | undefined>();
   const [bilibiliHasMore, setBilibiliHasMore] = useState(false);
   const [selectedBilibili, setSelectedBilibili] = useState<string | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -69,7 +69,7 @@ export default function VideoPage({ params }: VideoPageProps) {
     setYoutubeComments([]);
     setBilibiliComments([]);
     setYoutubeNextPage(undefined);
-    setBilibiliPage(1);
+    setBilibiliCursor(undefined);
     setBilibiliHasMore(false);
 
     try {
@@ -90,6 +90,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         setYoutubeCommentTotal(data.data.youtube?.totalCount || 0);
         setBilibiliCommentTotal(data.data.bilibili?.totalCount || 0);
         setYoutubeNextPage(data.data.youtube?.nextPageToken);
+        setBilibiliCursor(data.data.bilibili?.nextOffset);
         setBilibiliHasMore(data.data.bilibili?.hasMore ?? false);
       }
     } catch (err) {
@@ -125,20 +126,21 @@ export default function VideoPage({ params }: VideoPageProps) {
 
   async function loadMoreBilibili() {
     if (!match || !selectedBilibili || !bilibiliHasMore || loadingMore) return;
-    const nextPage = bilibiliPage + 1;
     setLoadingMore('bilibili');
     try {
       const p = new URLSearchParams();
       p.set('bilibiliAid', selectedBilibili);
       p.set('sortBy', sortBy);
-      p.set('page', nextPage.toString());
+      if (bilibiliCursor) {
+        p.set('bilibiliCursor', bilibiliCursor);
+      }
 
       const response = await fetch(`/api/video/comments?${p.toString()}`);
       const data = await response.json();
 
       if (data.success && data.data?.bilibili) {
         setBilibiliComments((prev) => [...prev, ...data.data.bilibili.comments]);
-        setBilibiliPage(nextPage);
+        setBilibiliCursor(data.data.bilibili.nextOffset);
         setBilibiliHasMore(data.data.bilibili.hasMore ?? false);
       }
     } catch (err) {

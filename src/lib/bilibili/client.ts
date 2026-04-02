@@ -37,11 +37,12 @@ interface BilibiliCommentsResponse {
   code: number;
   message: string;
   data: {
-    page: {
-      num: number;
-      size: number;
-      count: number;
-      acount: number;
+    cursor: {
+      is_end: boolean;
+      all_count: number;
+      pagination_reply?: {
+        next_offset: string;
+      };
     };
     replies: BilibiliRawComment[] | null;
   };
@@ -262,21 +263,26 @@ export async function getVideoByAid(aid: number): Promise<BilibiliVideo | null> 
 
 export async function getVideoComments(
   aid: number,
-  page = 1,
+  mode: 2 | 3 = 3,
   pageSize = 20,
-  sortBy: 0 | 1 | 2 = 2
-): Promise<{ comments: BilibiliComment[]; hasMore: boolean; totalCount: number }> {
+  nextOffset?: string
+): Promise<{ comments: BilibiliComment[]; hasMore: boolean; totalCount: number; nextOffset?: string }> {
   try {
-    const safePageSize = Math.min(Math.max(pageSize, 1), 20);
-    const url = new URL('/x/v2/reply', BILIBILI_API_BASE);
+    const safePageSize = Math.min(Math.max(pageSize, 1), 30);
+    const url = new URL('/x/v2/reply/main', BILIBILI_API_BASE);
     url.searchParams.set('oid', aid.toString());
     url.searchParams.set('type', '1');
-    url.searchParams.set('pn', page.toString());
+    url.searchParams.set('mode', mode.toString());
     url.searchParams.set('ps', safePageSize.toString());
-    url.searchParams.set('sort', sortBy.toString());
 
+    if (nextOffset) {
+      url.searchParams.set('pagination_str', JSON.stringify({ offset: nextOffset }));
+    }
+
+    const headers = await getHeaders();
+    delete headers['Cookie'];
     const response = await fetch(url.toString(), {
-      headers: await getHeaders(),
+      headers,
       next: { revalidate: 30 },
     });
 
@@ -291,12 +297,13 @@ export async function getVideoComments(
     }
 
     const comments = (data.data.replies || []).flatMap(flattenReplies);
-    const totalCount = data.data.page.acount || data.data.page.count || comments.length;
+    const totalCount = data.data.cursor.all_count || comments.length;
 
     return {
       comments,
-      hasMore: data.data.page.num * safePageSize < totalCount,
+      hasMore: !data.data.cursor.is_end,
       totalCount,
+      nextOffset: data.data.cursor.pagination_reply?.next_offset,
     };
   } catch (error) {
     console.error('Failed to fetch Bilibili comments:', error);

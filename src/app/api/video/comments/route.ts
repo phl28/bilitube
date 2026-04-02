@@ -7,10 +7,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const youtubeId = searchParams.get('youtubeId');
     const bilibiliAid = searchParams.get('bilibiliAid');
-    const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '100', 10);
     const sortBy = searchParams.get('sortBy') || 'top';
     const pageToken = searchParams.get('pageToken') || undefined;
+    const bilibiliCursor = searchParams.get('bilibiliCursor') || undefined;
 
     const results: {
       youtube?: Awaited<ReturnType<typeof youtube.getVideoComments>>;
@@ -23,12 +23,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (bilibiliAid) {
-      const bilibiliSort = sortBy === 'new' ? 0 : sortBy === 'hot' ? 1 : 1;
+      const bilibiliMode: 2 | 3 = sortBy === 'new' ? 2 : 3;
       results.bilibili = await bilibili.getVideoComments(
         parseInt(bilibiliAid, 10),
-        page,
+        bilibiliMode,
         pageSize,
-        bilibiliSort
+        bilibiliCursor
       );
     }
 
