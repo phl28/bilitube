@@ -151,6 +151,13 @@ export default function VideoPage({ params }: VideoPageProps) {
   const youtubeThreads = useMemo(() => threadYoutubeComments(youtubeComments), [youtubeComments]);
   const bilibiliThreads = useMemo(() => threadBilibiliComments(bilibiliComments), [bilibiliComments]);
 
+  const sortedReuploads = useMemo(() =>
+    [...match?.bilibiliReuploads ?? []].sort((a, b) =>
+      b.matchConfidence - a.matchConfidence
+      || b.video.viewCount - a.video.viewCount
+      || b.video.commentCount - a.video.commentCount
+    ), [match?.bilibiliReuploads]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -172,98 +179,38 @@ export default function VideoPage({ params }: VideoPageProps) {
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-4">
       <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 min-w-0 space-y-3">
-          <div>
-            <div className="aspect-video bg-black rounded-xl overflow-hidden">
-              <iframe
-                src={`https://www.youtube.com/embed/${match.youtubeVideo.id}`}
-                className="w-full h-full"
-                allowFullScreen
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            </div>
-            <h1 className="text-lg font-semibold mt-3 leading-snug">
-              {match.youtubeVideo.title}
-            </h1>
-            <p className="text-sm text-muted mt-1">
-              {match.youtubeVideo.channelTitle} &middot; {formatViewCount(match.youtubeVideo.viewCount)} views
-            </p>
-          </div>
-
-          <div className="bg-surface rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold">Comments</h2>
-              <div className="flex gap-2">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                  className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none"
-                >
-                  <option value="top">Top</option>
-                  <option value="new">Newest</option>
-                  <option value="hot">Hot</option>
-                </select>
-                <button
-                  onClick={() => fetchComments()}
-                  disabled={loadingComments}
-                  className="px-3 py-1.5 bg-surface-hover hover:bg-border disabled:opacity-40 text-foreground rounded-lg text-sm transition-colors"
-                >
-                  {loadingComments ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <ThreadedCommentSection
-                title="YouTube Comments"
-                platform="youtube"
-                threads={youtubeThreads}
-                totalCount={youtubeCommentTotal}
-                loading={loadingComments}
-                hasMore={!!youtubeNextPage}
-                loadingMore={loadingMore === 'youtube'}
-                onLoadMore={loadMoreYoutube}
-              />
-
-              {selectedBilibili && (
-                <ThreadedCommentSection
-                  title="Bilibili Comments"
-                  platform="bilibili"
-                  threads={bilibiliThreads}
-                  totalCount={bilibiliCommentTotal}
-                  loading={loadingComments}
-                  hasMore={bilibiliHasMore}
-                  loadingMore={loadingMore === 'bilibili'}
-                  onLoadMore={loadMoreBilibili}
-                />
-              )}
-            </div>
+        <div className="flex-1 min-w-0">
+          <div className="aspect-video bg-black rounded-xl overflow-hidden">
+            <iframe
+              src={`https://www.youtube.com/embed/${match.youtubeVideo.id}`}
+              className="w-full h-full"
+              allowFullScreen
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            />
           </div>
         </div>
 
-        <div className="lg:w-[380px] shrink-0 space-y-4">
-          <div>
-            <h2 className="text-base font-semibold mb-3">
-              Bilibili Reuploads ({match.bilibiliReuploads.length})
-            </h2>
+        <div className="lg:w-[380px] shrink-0 flex flex-col" style={{ maxHeight: 'calc((100vw - 380px - 48px - 24px) * 9 / 16)' }}>
+          <h2 className="text-base font-semibold mb-3 shrink-0">
+            Bilibili Reuploads ({sortedReuploads.length})
+          </h2>
 
-            {match.bilibiliReuploads.length === 0 ? (
-              <p className="text-muted text-sm">No Bilibili reuploads found.</p>
-            ) : (
-              <div className="space-y-2">
-                {match.bilibiliReuploads.map((reupload) => (
-                  <BilibiliCard
-                    key={reupload.video.bvid}
-                    reupload={reupload}
-                    isSelected={selectedBilibili === reupload.video.aid.toString()}
-                    onSelect={() => setSelectedBilibili(reupload.video.aid.toString())}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {sortedReuploads.length === 0 ? (
+            <p className="text-muted text-sm">No Bilibili reuploads found.</p>
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+              {sortedReuploads.map((reupload) => (
+                <BilibiliCard
+                  key={reupload.video.bvid}
+                  reupload={reupload}
+                  isSelected={selectedBilibili === reupload.video.aid.toString()}
+                  onSelect={() => setSelectedBilibili(reupload.video.aid.toString())}
+                />
+              ))}
+            </div>
+          )}
 
-          <div className="bg-surface rounded-xl p-4">
+          <div className="bg-surface rounded-xl p-4 mt-4 shrink-0">
             <h3 className="text-sm font-semibold mb-2">Match Info</h3>
             <dl className="text-sm space-y-1.5">
               <div className="flex justify-between">
@@ -276,6 +223,69 @@ export default function VideoPage({ params }: VideoPageProps) {
               </div>
             </dl>
           </div>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <h1 className="text-lg font-semibold leading-snug">
+          {match.youtubeVideo.title}
+        </h1>
+        <p className="text-sm text-muted mt-1">
+          {match.youtubeVideo.channelTitle} &middot; {formatViewCount(match.youtubeVideo.viewCount)} views
+        </p>
+      </div>
+
+      <div className="bg-surface rounded-xl p-4 mt-3">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold">Comments</h2>
+          <div className="flex gap-2">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none"
+            >
+              <option value="top">Top</option>
+              <option value="new">Newest</option>
+              <option value="hot">Hot</option>
+            </select>
+            <button
+              onClick={() => fetchComments()}
+              disabled={loadingComments}
+              className="px-3 py-1.5 bg-surface-hover hover:bg-border disabled:opacity-40 text-foreground rounded-lg text-sm transition-colors"
+            >
+              {loadingComments ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="max-h-[600px] overflow-y-auto pr-1">
+            <ThreadedCommentSection
+              title="YouTube Comments"
+              platform="youtube"
+              threads={youtubeThreads}
+              totalCount={youtubeCommentTotal}
+              loading={loadingComments}
+              hasMore={!!youtubeNextPage}
+              loadingMore={loadingMore === 'youtube'}
+              onLoadMore={loadMoreYoutube}
+            />
+          </div>
+
+          {selectedBilibili && (
+            <div className="max-h-[600px] overflow-y-auto pr-1">
+              <ThreadedCommentSection
+                title="Bilibili Comments"
+                platform="bilibili"
+                threads={bilibiliThreads}
+                totalCount={bilibiliCommentTotal}
+                loading={loadingComments}
+                hasMore={bilibiliHasMore}
+                loadingMore={loadingMore === 'bilibili'}
+                onLoadMore={loadMoreBilibili}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
