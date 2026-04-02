@@ -304,6 +304,49 @@ export async function getVideoComments(
   }
 }
 
+export async function getCommentReplies(
+  oid: number,
+  rootRpid: number,
+  page = 1,
+  pageSize = 20
+): Promise<{ comments: BilibiliComment[]; hasMore: boolean }> {
+  try {
+    const safePageSize = Math.min(Math.max(pageSize, 1), 20);
+    const url = new URL('/x/v2/reply/reply', BILIBILI_API_BASE);
+    url.searchParams.set('oid', oid.toString());
+    url.searchParams.set('type', '1');
+    url.searchParams.set('root', rootRpid.toString());
+    url.searchParams.set('pn', page.toString());
+    url.searchParams.set('ps', safePageSize.toString());
+
+    const response = await fetch(url.toString(), {
+      headers: await getHeaders(),
+      next: { revalidate: 30 },
+    });
+
+    if (!response.ok) {
+      return { comments: [], hasMore: false };
+    }
+
+    const data = await response.json();
+
+    if (data.code !== 0 || !data.data) {
+      return { comments: [], hasMore: false };
+    }
+
+    const replies: BilibiliComment[] = (data.data.replies || []).map(parseComment);
+    const total = data.data.page?.count || 0;
+
+    return {
+      comments: replies,
+      hasMore: page * safePageSize < total,
+    };
+  } catch (error) {
+    console.error('Failed to fetch Bilibili comment replies:', error);
+    return { comments: [], hasMore: false };
+  }
+}
+
 function flattenReplies(comment: BilibiliRawComment): BilibiliComment[] {
   const result: BilibiliComment[] = [parseComment(comment)];
   if (comment.replies) {

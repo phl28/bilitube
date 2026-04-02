@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "BiliTube - Connect YouTube & Bilibili",
   description: "See comments from both YouTube and Bilibili in one place",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -31,11 +34,12 @@ export default function RootLayout({
         <header className="sticky top-0 z-50 bg-header-bg border-b border-border">
           <div className="flex items-center h-14 px-6">
             <a href="/" className="flex items-center gap-2 shrink-0">
-              <div className="w-7 h-7 rounded bg-accent flex items-center justify-center">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </div>
+              <svg width="28" height="28" viewBox="0 0 100 100" className="text-accent shrink-0">
+                <path d="M 32 36 L 20 16" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+                <path d="M 68 36 L 80 16" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+                <rect x="10" y="30" width="80" height="58" rx="18" fill="currentColor" />
+                <polygon points="40,46 64,59 40,72" fill="white" />
+              </svg>
               <span className="text-lg font-semibold tracking-tight">
                 Bili<span className="text-accent">Tube</span>
               </span>

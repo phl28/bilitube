@@ -1,1 +1,1 @@
-export { searchVideos, getVideoByBvid, getVideoByAid, getVideoComments } from './client';
+export { searchVideos, getVideoByBvid, getVideoByAid, getVideoComments, getCommentReplies } from './client';

@@ -1,10 +1,16 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useMemo, use } from 'react';
 import { VideoMatch, YouTubeComment, BilibiliComment } from '@/types';
 
 interface VideoPageProps {
   params: Promise<{ id: string }>;
+}
+
+interface CommentThread<T> {
+  comment: T;
+  replies: T[];
+  totalReplies: number;
 }
 
 export default function VideoPage({ params }: VideoPageProps) {
@@ -17,8 +23,12 @@ export default function VideoPage({ params }: VideoPageProps) {
   const [bilibiliComments, setBilibiliComments] = useState<BilibiliComment[]>([]);
   const [youtubeCommentTotal, setYoutubeCommentTotal] = useState(0);
   const [bilibiliCommentTotal, setBilibiliCommentTotal] = useState(0);
+  const [youtubeNextPage, setYoutubeNextPage] = useState<string | undefined>();
+  const [bilibiliPage, setBilibiliPage] = useState(1);
+  const [bilibiliHasMore, setBilibiliHasMore] = useState(false);
   const [selectedBilibili, setSelectedBilibili] = useState<string | null>(null);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [loadingMore, setLoadingMore] = useState<'youtube' | 'bilibili' | null>(null);
 
   useEffect(() => {
     fetchVideoMatch();
@@ -56,15 +66,22 @@ export default function VideoPage({ params }: VideoPageProps) {
     if (!match) return;
 
     setLoadingComments(true);
-    try {
-      const params = new URLSearchParams();
-      params.set('youtubeId', match.youtubeVideo.id);
-      if (selectedBilibili) {
-        params.set('bilibiliAid', selectedBilibili);
-      }
-      params.set('sortBy', sortBy);
+    setYoutubeComments([]);
+    setBilibiliComments([]);
+    setYoutubeNextPage(undefined);
+    setBilibiliPage(1);
+    setBilibiliHasMore(false);
 
-      const response = await fetch(`/api/video/comments?${params.toString()}`);
+    try {
+      const p = new URLSearchParams();
+      p.set('youtubeId', match.youtubeVideo.id);
+      if (selectedBilibili) {
+        p.set('bilibiliAid', selectedBilibili);
+      }
+      p.set('sortBy', sortBy);
+      p.set('pageSize', '100');
+
+      const response = await fetch(`/api/video/comments?${p.toString()}`);
       const data = await response.json();
 
       if (data.success && data.data) {
@@ -72,6 +89,8 @@ export default function VideoPage({ params }: VideoPageProps) {
         setBilibiliComments(data.data.bilibili?.comments || []);
         setYoutubeCommentTotal(data.data.youtube?.totalCount || 0);
         setBilibiliCommentTotal(data.data.bilibili?.totalCount || 0);
+        setYoutubeNextPage(data.data.youtube?.nextPageToken);
+        setBilibiliHasMore(data.data.bilibili?.hasMore ?? false);
       }
     } catch (err) {
       console.error('Failed to fetch comments:', err);
@@ -80,9 +99,57 @@ export default function VideoPage({ params }: VideoPageProps) {
     }
   }
 
-  async function refreshComments() {
-    await fetchComments();
+  async function loadMoreYoutube() {
+    if (!match || !youtubeNextPage || loadingMore) return;
+    setLoadingMore('youtube');
+    try {
+      const p = new URLSearchParams();
+      p.set('youtubeId', match.youtubeVideo.id);
+      p.set('sortBy', sortBy);
+      p.set('pageSize', '100');
+      p.set('pageToken', youtubeNextPage);
+
+      const response = await fetch(`/api/video/comments?${p.toString()}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.youtube) {
+        setYoutubeComments((prev) => [...prev, ...data.data.youtube.comments]);
+        setYoutubeNextPage(data.data.youtube.nextPageToken);
+      }
+    } catch (err) {
+      console.error('Failed to load more YouTube comments:', err);
+    } finally {
+      setLoadingMore(null);
+    }
   }
+
+  async function loadMoreBilibili() {
+    if (!match || !selectedBilibili || !bilibiliHasMore || loadingMore) return;
+    const nextPage = bilibiliPage + 1;
+    setLoadingMore('bilibili');
+    try {
+      const p = new URLSearchParams();
+      p.set('bilibiliAid', selectedBilibili);
+      p.set('sortBy', sortBy);
+      p.set('page', nextPage.toString());
+
+      const response = await fetch(`/api/video/comments?${p.toString()}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.bilibili) {
+        setBilibiliComments((prev) => [...prev, ...data.data.bilibili.comments]);
+        setBilibiliPage(nextPage);
+        setBilibiliHasMore(data.data.bilibili.hasMore ?? false);
+      }
+    } catch (err) {
+      console.error('Failed to load more Bilibili comments:', err);
+    } finally {
+      setLoadingMore(null);
+    }
+  }
+
+  const youtubeThreads = useMemo(() => threadYoutubeComments(youtubeComments), [youtubeComments]);
+  const bilibiliThreads = useMemo(() => threadBilibiliComments(bilibiliComments), [bilibiliComments]);
 
   if (loading) {
     return (
@@ -103,9 +170,9 @@ export default function VideoPage({ params }: VideoPageProps) {
   if (!match) return null;
 
   return (
-    <div className="max-w-[1280px] mx-auto px-6 py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
+    <div className="max-w-[1280px] mx-auto px-6 py-4">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 min-w-0 space-y-3">
           <div>
             <div className="aspect-video bg-black rounded-xl overflow-hidden">
               <iframe
@@ -137,7 +204,7 @@ export default function VideoPage({ params }: VideoPageProps) {
                   <option value="hot">Hot</option>
                 </select>
                 <button
-                  onClick={refreshComments}
+                  onClick={() => fetchComments()}
                   disabled={loadingComments}
                   className="px-3 py-1.5 bg-surface-hover hover:bg-border disabled:opacity-40 text-foreground rounded-lg text-sm transition-colors"
                 >
@@ -146,29 +213,35 @@ export default function VideoPage({ params }: VideoPageProps) {
               </div>
             </div>
 
-            <div className="space-y-5">
-              <CommentSection
+            <div className="space-y-6">
+              <ThreadedCommentSection
                 title="YouTube Comments"
                 platform="youtube"
-                comments={youtubeComments}
+                threads={youtubeThreads}
                 totalCount={youtubeCommentTotal}
                 loading={loadingComments}
+                hasMore={!!youtubeNextPage}
+                loadingMore={loadingMore === 'youtube'}
+                onLoadMore={loadMoreYoutube}
               />
 
               {selectedBilibili && (
-                <CommentSection
+                <ThreadedCommentSection
                   title="Bilibili Comments"
                   platform="bilibili"
-                  comments={bilibiliComments}
+                  threads={bilibiliThreads}
                   totalCount={bilibiliCommentTotal}
                   loading={loadingComments}
+                  hasMore={bilibiliHasMore}
+                  loadingMore={loadingMore === 'bilibili'}
+                  onLoadMore={loadMoreBilibili}
                 />
               )}
             </div>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="lg:w-[380px] shrink-0 space-y-4">
           <div>
             <h2 className="text-base font-semibold mb-3">
               Bilibili Reuploads ({match.bilibiliReuploads.length})
@@ -209,80 +282,277 @@ export default function VideoPage({ params }: VideoPageProps) {
   );
 }
 
-function CommentSection({
+function threadYoutubeComments(comments: YouTubeComment[]): CommentThread<YouTubeComment>[] {
+  const topLevel: YouTubeComment[] = [];
+  const repliesByParent = new Map<string, YouTubeComment[]>();
+
+  for (const c of comments) {
+    if (!c.parentId) {
+      topLevel.push(c);
+    } else {
+      const list = repliesByParent.get(c.parentId) || [];
+      list.push(c);
+      repliesByParent.set(c.parentId, list);
+    }
+  }
+
+  return topLevel.map((c) => {
+    const replies = repliesByParent.get(c.id) || [];
+    return { comment: c, replies, totalReplies: replies.length };
+  });
+}
+
+function threadBilibiliComments(comments: BilibiliComment[]): CommentThread<BilibiliComment>[] {
+  const topLevel: BilibiliComment[] = [];
+  const repliesByParent = new Map<number, BilibiliComment[]>();
+
+  for (const c of comments) {
+    if (c.parent === 0) {
+      topLevel.push(c);
+    } else {
+      const list = repliesByParent.get(c.parent) || [];
+      list.push(c);
+      repliesByParent.set(c.parent, list);
+    }
+  }
+
+  return topLevel.map((c) => {
+    const replies = repliesByParent.get(c.rpid) || [];
+    return { comment: c, replies, totalReplies: c.rcount };
+  });
+}
+
+function ThreadedCommentSection({
   title,
   platform,
-  comments,
+  threads,
   totalCount,
   loading,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   title: string;
   platform: 'youtube' | 'bilibili';
-  comments: (YouTubeComment | BilibiliComment)[];
+  threads: CommentThread<YouTubeComment>[] | CommentThread<BilibiliComment>[];
   totalCount?: number;
   loading: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
-  const displayedCount = totalCount && totalCount > 0 ? totalCount : comments.length;
-  const showingSubset = displayedCount > comments.length;
+  const commentCount = totalCount && totalCount > 0 ? totalCount : threads.length;
 
   return (
     <div>
       <h3 className="text-sm font-medium text-muted mb-3 flex items-center gap-2">
-        <span
-          className={`w-2 h-2 rounded-full ${
-            platform === 'youtube' ? 'bg-red-500' : 'bg-sky-500'
-          }`}
-        />
-        {title} ({displayedCount.toLocaleString()}{showingSubset ? ` total, showing ${comments.length.toLocaleString()}` : ''})
+        <span className={`w-2 h-2 rounded-full ${platform === 'youtube' ? 'bg-red-500' : 'bg-sky-500'}`} />
+        {title} ({commentCount.toLocaleString()})
       </h3>
 
       {loading ? (
         <div className="text-muted text-sm py-4">Loading comments...</div>
-      ) : comments.length === 0 ? (
+      ) : threads.length === 0 ? (
         <div className="text-muted text-sm py-4">No comments available.</div>
       ) : (
-        <div className="space-y-1 max-h-[600px] overflow-y-auto">
-          {comments.map((comment) => (
-            <CommentCard key={getId(comment)} comment={comment} platform={platform} />
-          ))}
+        <div>
+          <div className="space-y-0">
+            {(threads as CommentThread<any>[]).map((thread) => (
+              <CommentThreadView
+                key={platform === 'youtube' ? (thread.comment as YouTubeComment).id : `bili-${(thread.comment as BilibiliComment).rpid}`}
+                thread={thread}
+                platform={platform}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <button
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              className="mt-3 w-full py-2.5 text-sm font-medium text-accent hover:text-accent-hover disabled:opacity-40 transition-colors rounded-lg hover:bg-surface-hover"
+            >
+              {loadingMore ? 'Loading more...' : 'Show more comments'}
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function CommentCard({
+function CommentThreadView({
+  thread,
+  platform,
+}: {
+  thread: CommentThread<any>;
+  platform: 'youtube' | 'bilibili';
+}) {
+  const [showReplies, setShowReplies] = useState(false);
+  const [fetchedReplies, setFetchedReplies] = useState<any[]>([]);
+  const [repliesPage, setRepliesPage] = useState(1);
+  const [repliesHasMore, setRepliesHasMore] = useState(false);
+  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [hasFetchedAll, setHasFetchedAll] = useState(false);
+
+  const displayReplies = hasFetchedAll ? fetchedReplies : thread.replies;
+  const hasReplies = thread.totalReplies > 0 || thread.replies.length > 0;
+  const hiddenCount = thread.totalReplies - displayReplies.length;
+
+  async function fetchAllReplies() {
+    if (platform !== 'bilibili' || loadingReplies) return;
+    const biliComment = thread.comment as BilibiliComment;
+    setLoadingReplies(true);
+    try {
+      const p = new URLSearchParams();
+      p.set('oid', biliComment.oid.toString());
+      p.set('root', biliComment.rpid.toString());
+      p.set('page', '1');
+
+      const response = await fetch(`/api/video/replies?${p.toString()}`);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setFetchedReplies(data.data.comments);
+        setRepliesHasMore(data.data.hasMore);
+        setRepliesPage(1);
+        setHasFetchedAll(true);
+      }
+    } catch (err) {
+      console.error('Failed to fetch replies:', err);
+    } finally {
+      setLoadingReplies(false);
+    }
+  }
+
+  async function loadMoreReplies() {
+    if (platform !== 'bilibili' || loadingReplies) return;
+    const biliComment = thread.comment as BilibiliComment;
+    const nextPage = repliesPage + 1;
+    setLoadingReplies(true);
+    try {
+      const p = new URLSearchParams();
+      p.set('oid', biliComment.oid.toString());
+      p.set('root', biliComment.rpid.toString());
+      p.set('page', nextPage.toString());
+
+      const response = await fetch(`/api/video/replies?${p.toString()}`);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setFetchedReplies((prev) => [...prev, ...data.data.comments]);
+        setRepliesHasMore(data.data.hasMore);
+        setRepliesPage(nextPage);
+      }
+    } catch (err) {
+      console.error('Failed to load more replies:', err);
+    } finally {
+      setLoadingReplies(false);
+    }
+  }
+
+  return (
+    <div className="py-2.5">
+      <SingleComment comment={thread.comment} platform={platform} />
+
+      {hasReplies && (
+        <div className="ml-11 mt-1">
+          {!showReplies ? (
+            <button
+              onClick={() => {
+                setShowReplies(true);
+                if (platform === 'bilibili' && thread.totalReplies > thread.replies.length && !hasFetchedAll) {
+                  fetchAllReplies();
+                }
+              }}
+              className="text-xs font-medium text-accent hover:text-accent-hover py-1"
+            >
+              {thread.totalReplies > 0 ? thread.totalReplies : thread.replies.length} {thread.totalReplies === 1 ? 'reply' : 'replies'}
+            </button>
+          ) : (
+            <div>
+              <button
+                onClick={() => setShowReplies(false)}
+                className="text-xs font-medium text-accent hover:text-accent-hover py-1 mb-1"
+              >
+                Hide replies
+              </button>
+              <div className="space-y-0 border-l-2 border-border pl-4">
+                {loadingReplies && displayReplies.length === 0 ? (
+                  <p className="text-xs text-muted py-2">Loading replies...</p>
+                ) : (
+                  displayReplies.map((reply: any) => (
+                    <SingleComment
+                      key={platform === 'youtube' ? reply.id : `bili-${reply.rpid}`}
+                      comment={reply}
+                      platform={platform}
+                      isReply
+                    />
+                  ))
+                )}
+                {platform === 'bilibili' && hasFetchedAll && repliesHasMore && (
+                  <button
+                    onClick={loadMoreReplies}
+                    disabled={loadingReplies}
+                    className="text-xs font-medium text-accent hover:text-accent-hover py-2 disabled:opacity-40"
+                  >
+                    {loadingReplies ? 'Loading...' : `Show more replies`}
+                  </button>
+                )}
+                {platform === 'youtube' && hiddenCount > 0 && (
+                  <p className="text-xs text-muted py-2">
+                    View all replies on YouTube
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SingleComment({
   comment,
   platform,
+  isReply = false,
 }: {
   comment: YouTubeComment | BilibiliComment;
   platform: 'youtube' | 'bilibili';
+  isReply?: boolean;
 }) {
   const isYouTube = platform === 'youtube';
   const ytComment = isYouTube ? (comment as YouTubeComment) : null;
   const biliComment = !isYouTube ? (comment as BilibiliComment) : null;
 
   return (
-    <div className="py-2.5">
+    <div className={`py-2 ${isReply ? '' : ''}`}>
       <div className="flex items-start gap-3">
         <img
           src={isYouTube ? ytComment!.authorProfileImageUrl : `/api/image?url=${encodeURIComponent(biliComment!.avatar)}`}
           alt=""
-          className="w-8 h-8 rounded-full shrink-0"
+          className={`rounded-full shrink-0 ${isReply ? 'w-6 h-6' : 'w-8 h-8'}`}
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="font-medium text-xs truncate">
+            <span className={`font-medium truncate ${isReply ? 'text-[11px]' : 'text-xs'}`}>
               {isYouTube ? ytComment!.authorDisplayName : biliComment!.uname}
             </span>
-            <span className="text-xs text-muted shrink-0">
+            <span className={`text-muted shrink-0 ${isReply ? 'text-[11px]' : 'text-xs'}`}>
               {formatTimeAgo(isYouTube ? ytComment!.publishedAt : new Date(biliComment!.ctime * 1000).toISOString())}
             </span>
           </div>
-          <p className="text-sm leading-relaxed break-words">
-            {isYouTube ? ytComment!.textDisplay : biliComment!.message}
-          </p>
-          <div className="mt-1 text-xs text-muted">
+          {isYouTube ? (
+            <div
+              className={`leading-relaxed break-words [&_a]:text-accent [&_a]:hover:underline ${isReply ? 'text-xs' : 'text-sm'}`}
+              dangerouslySetInnerHTML={{ __html: ytComment!.textDisplay }}
+            />
+          ) : (
+            <p className={`leading-relaxed break-words ${isReply ? 'text-xs' : 'text-sm'}`}>
+              {biliComment!.message}
+            </p>
+          )}
+          <div className={`mt-1 text-muted ${isReply ? 'text-[11px]' : 'text-xs'}`}>
             {formatLikeCount(isYouTube ? ytComment!.likeCount : biliComment!.like)} likes
           </div>
         </div>
@@ -347,11 +617,6 @@ function BilibiliCard({
       </div>
     </div>
   );
-}
-
-function getId(comment: YouTubeComment | BilibiliComment): string {
-  if ('id' in comment) return comment.id;
-  return `bili-${comment.rpid}`;
 }
 
 function formatViewCount(count: number): string {
