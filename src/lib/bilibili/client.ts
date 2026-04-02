@@ -326,8 +326,10 @@ export async function getCommentReplies(
     url.searchParams.set('pn', page.toString());
     url.searchParams.set('ps', safePageSize.toString());
 
+    const headers = await getHeaders();
+    delete headers['Cookie'];
     const response = await fetch(url.toString(), {
-      headers: await getHeaders(),
+      headers,
       next: { revalidate: 30 },
     });
 
