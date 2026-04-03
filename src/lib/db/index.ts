@@ -4,6 +4,8 @@ export {
   saveVideoMatch,
   addAdminCorrection,
   getAdminCorrections,
+  addBilibiliReupload,
+  removeBilibiliReupload,
   getCommentTranslation,
   saveCommentTranslation,
 } from './queries';

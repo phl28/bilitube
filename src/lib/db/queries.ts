@@ -1,5 +1,5 @@
 import db, { initDatabase } from './client';
-import { YouTubeVideo, VideoMatch, BilibiliReupload } from '@/types';
+import { YouTubeVideo, VideoMatch, BilibiliReupload, BilibiliVideo } from '@/types';
 
 export interface CommentTranslationRecord {
   id: number;
@@ -123,6 +123,52 @@ export async function addAdminCorrection(
     sql: 'INSERT INTO admin_corrections (youtube_id, bvid, action) VALUES (?, ?, ?)',
     args: [youtubeId, bvid, action],
   });
+}
+
+export async function addBilibiliReupload(
+  youtubeId: string,
+  video: BilibiliVideo
+): Promise<void> {
+  await initDatabase();
+
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO bilibili_reuploads
+          (youtube_id, bvid, aid, title, uploader_name, thumbnail, duration, views, comments, likes, match_confidence, match_method, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    args: [
+      youtubeId,
+      video.bvid,
+      video.aid,
+      video.title,
+      video.uploaderName,
+      video.thumbnailUrl,
+      video.durationSeconds,
+      video.viewCount,
+      video.commentCount,
+      video.likeCount,
+      1.0,
+      'admin',
+    ],
+  });
+}
+
+export async function removeBilibiliReupload(
+  youtubeId: string,
+  bvid: string | null
+): Promise<void> {
+  await initDatabase();
+
+  if (bvid) {
+    await db.execute({
+      sql: 'DELETE FROM bilibili_reuploads WHERE youtube_id = ? AND bvid = ?',
+      args: [youtubeId, bvid],
+    });
+  } else {
+    await db.execute({
+      sql: 'DELETE FROM bilibili_reuploads WHERE youtube_id = ?',
+      args: [youtubeId],
+    });
+  }
 }
 
 export async function getRecentMatches(limit: number = 12): Promise<VideoMatch[]> {

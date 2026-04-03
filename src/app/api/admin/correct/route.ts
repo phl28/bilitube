@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addAdminCorrection } from '@/lib/db';
+import { addAdminCorrection, addBilibiliReupload, removeBilibiliReupload } from '@/lib/db';
+import { getVideoByBvid } from '@/lib/bilibili/client';
 
 const ADMIN_KEY = process.env.ADMIN_API_KEY;
 
@@ -21,6 +22,27 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Invalid request body' },
         { status: 400 }
       );
+    }
+
+    if (action === 'add') {
+      if (!bvid) {
+        return NextResponse.json(
+          { success: false, error: 'BV ID is required when adding a match' },
+          { status: 400 }
+        );
+      }
+
+      const bilibiliVideo = await getVideoByBvid(bvid);
+      if (!bilibiliVideo) {
+        return NextResponse.json(
+          { success: false, error: 'Bilibili video not found' },
+          { status: 404 }
+        );
+      }
+
+      await addBilibiliReupload(youtubeId, bilibiliVideo);
+    } else {
+      await removeBilibiliReupload(youtubeId, bvid || null);
     }
 
     await addAdminCorrection(youtubeId, bvid || null, action);
