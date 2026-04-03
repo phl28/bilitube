@@ -93,15 +93,21 @@ interface BilibiliVideoInfoResponse {
   };
 }
 
-async function getHeaders(cookie?: string) {
+async function getHeaders(cookie?: string, includeCookie = true) {
   const buvid3 = await getBuvid3();
-  return {
+
+  const headers: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Referer': 'https://www.bilibili.com',
     'Origin': 'https://www.bilibili.com',
     'Accept': 'application/json',
-    'Cookie': cookie || `buvid3=${buvid3}`,
   };
+
+  if (includeCookie) {
+    headers.Cookie = cookie || `buvid3=${buvid3}`;
+  }
+
+  return headers;
 }
 
 export async function searchVideos(
@@ -279,8 +285,7 @@ export async function getVideoComments(
       url.searchParams.set('pagination_str', JSON.stringify({ offset: nextOffset }));
     }
 
-    const headers = await getHeaders();
-    delete headers['Cookie'];
+    const headers = await getHeaders(undefined, false);
     const response = await fetch(url.toString(), {
       headers,
       next: { revalidate: 30 },
@@ -326,8 +331,7 @@ export async function getCommentReplies(
     url.searchParams.set('pn', page.toString());
     url.searchParams.set('ps', safePageSize.toString());
 
-    const headers = await getHeaders();
-    delete headers['Cookie'];
+    const headers = await getHeaders(undefined, false);
     const response = await fetch(url.toString(), {
       headers,
       next: { revalidate: 30 },
