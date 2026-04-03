@@ -1,6 +1,7 @@
 export interface YouTubeComment {
   id: string;
   textDisplay: string;
+  textOriginal: string;
   authorDisplayName: string;
   authorProfileImageUrl: string;
   authorChannelId: string;

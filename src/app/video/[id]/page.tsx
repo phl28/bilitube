@@ -537,6 +537,57 @@ function SingleComment({
   const ytComment = isYouTube ? (comment as YouTubeComment) : null;
   const biliComment = !isYouTube ? (comment as BilibiliComment) : null;
 
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [translationError, setTranslationError] = useState(false);
+
+  async function handleTranslate() {
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+
+    if (translatedText) {
+      setShowTranslation(true);
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslationError(false);
+
+    try {
+      let textToTranslate = '';
+      let targetLang = '';
+
+      if (isYouTube) {
+        textToTranslate = ytComment!.textOriginal;
+        targetLang = 'zh';
+      } else {
+        textToTranslate = biliComment!.message;
+        targetLang = 'en';
+      }
+
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToTranslate, targetLang }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.data?.translatedText) {
+        setTranslatedText(data.data.translatedText);
+        setShowTranslation(true);
+      } else {
+        setTranslationError(true);
+      }
+    } catch (err) {
+      setTranslationError(true);
+    } finally {
+      setIsTranslating(false);
+    }
+  }
+
   return (
     <div className={`py-2 ${isReply ? '' : ''}`}>
       <div className="flex items-start gap-3">
@@ -555,17 +606,31 @@ function SingleComment({
             </span>
           </div>
           {isYouTube ? (
-            <div
-              className={`leading-relaxed break-words [&_a]:text-accent [&_a]:hover:underline ${isReply ? 'text-xs' : 'text-sm'}`}
-              dangerouslySetInnerHTML={{ __html: ytComment!.textDisplay }}
-            />
+            showTranslation && translatedText ? (
+              <p className={`leading-relaxed break-words ${isReply ? 'text-xs' : 'text-sm'}`}>
+                {translatedText}
+              </p>
+            ) : (
+              <div
+                className={`leading-relaxed break-words [&_a]:text-accent [&_a]:hover:underline ${isReply ? 'text-xs' : 'text-sm'}`}
+                dangerouslySetInnerHTML={{ __html: ytComment!.textDisplay }}
+              />
+            )
           ) : (
             <p className={`leading-relaxed break-words ${isReply ? 'text-xs' : 'text-sm'}`}>
-              {biliComment!.message}
+              {showTranslation && translatedText ? translatedText : biliComment!.message}
             </p>
           )}
-          <div className={`mt-1 text-muted ${isReply ? 'text-[11px]' : 'text-xs'}`}>
-            {formatLikeCount(isYouTube ? ytComment!.likeCount : biliComment!.like)} likes
+          <div className={`mt-1 flex items-center gap-3 text-muted ${isReply ? 'text-[11px]' : 'text-xs'}`}>
+            <span>{formatLikeCount(isYouTube ? ytComment!.likeCount : biliComment!.like)} likes</span>
+            <button
+              onClick={handleTranslate}
+              disabled={isTranslating}
+              className="hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              {isTranslating ? 'Translating...' : showTranslation ? 'Show original' : isYouTube ? 'Show Chinese' : 'Show English'}
+            </button>
+            {translationError && <span className="text-red-500">Translation failed</span>}
           </div>
         </div>
       </div>

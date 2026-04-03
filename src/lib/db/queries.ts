@@ -1,6 +1,17 @@
 import db, { initDatabase } from './client';
 import { YouTubeVideo, VideoMatch, BilibiliReupload } from '@/types';
 
+export interface CommentTranslationRecord {
+  id: number;
+  textHash: string;
+  sourceLang: string;
+  targetLang: string;
+  originalText: string;
+  translatedText: string;
+  provider: string;
+  createdAt: string;
+}
+
 export async function getVideoMatch(youtubeId: string): Promise<VideoMatch | null> {
   await initDatabase();
 
@@ -188,4 +199,62 @@ export async function getAdminCorrections(youtubeId: string) {
   });
 
   return result.rows;
+}
+
+export async function getCommentTranslation(
+  textHash: string,
+  sourceLang: string,
+  targetLang: string,
+  provider: string
+): Promise<CommentTranslationRecord | null> {
+  await initDatabase();
+
+  const result = await db.execute({
+    sql: `SELECT * FROM comment_translations
+          WHERE text_hash = ? AND source_lang = ? AND target_lang = ? AND provider = ?
+          LIMIT 1`,
+    args: [textHash, sourceLang, targetLang, provider],
+  });
+
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id as number,
+    textHash: row.text_hash as string,
+    sourceLang: row.source_lang as string,
+    targetLang: row.target_lang as string,
+    originalText: row.original_text as string,
+    translatedText: row.translated_text as string,
+    provider: row.provider as string,
+    createdAt: row.created_at as string,
+  };
+}
+
+export async function saveCommentTranslation(input: {
+  textHash: string;
+  sourceLang: string;
+  targetLang: string;
+  originalText: string;
+  translatedText: string;
+  provider: string;
+}): Promise<void> {
+  await initDatabase();
+
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO comment_translations
+          (text_hash, source_lang, target_lang, original_text, translated_text, provider)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [
+      input.textHash,
+      input.sourceLang,
+      input.targetLang,
+      input.originalText,
+      input.translatedText,
+      input.provider,
+    ],
+  });
 }

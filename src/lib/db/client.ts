@@ -52,8 +52,22 @@ export async function initDatabase() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS comment_translations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      text_hash TEXT NOT NULL,
+      source_lang TEXT NOT NULL,
+      target_lang TEXT NOT NULL,
+      original_text TEXT NOT NULL,
+      translated_text TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(text_hash, source_lang, target_lang, provider)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_bilibili_youtube ON bilibili_reuploads(youtube_id);
     CREATE INDEX IF NOT EXISTS idx_bilibili_bvid ON bilibili_reuploads(bvid);
+    CREATE INDEX IF NOT EXISTS idx_comment_translations_lookup
+      ON comment_translations(text_hash, source_lang, target_lang, provider);
   `);
 
   await ensureColumnExists('video_matches', 'youtube_playlist_id', 'TEXT');

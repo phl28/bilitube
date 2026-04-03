@@ -155,6 +155,7 @@ function parseComment(
   return {
     id: comment.id || threadId,
     textDisplay: snippet.textDisplay || '',
+    textOriginal: snippet.textOriginal || snippet.textDisplay || '',
     authorDisplayName: snippet.authorDisplayName || '',
     authorProfileImageUrl: snippet.authorProfileImageUrl || '',
     authorChannelId: snippet.authorChannelId?.value || '',
