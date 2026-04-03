@@ -18,10 +18,26 @@ export interface BilibiliComment {
   uname: string;
   avatar: string;
   message: string;
+  emotes: Record<string, BilibiliCommentEmote>;
+  pictures: BilibiliCommentPicture[];
   like: number;
   ctime: number;
   parent: number;
   rcount: number;
+}
+
+export interface BilibiliCommentEmote {
+  id?: number;
+  packageId?: number;
+  text: string;
+  url: string;
+}
+
+export interface BilibiliCommentPicture {
+  imgSrc: string;
+  imgWidth?: number;
+  imgHeight?: number;
+  imgSize?: number;
 }
 
 export interface UnifiedComment {

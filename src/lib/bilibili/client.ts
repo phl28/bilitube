@@ -62,6 +62,18 @@ interface BilibiliRawComment {
   };
   content: {
     message: string;
+    emote?: Record<string, {
+      id?: number;
+      package_id?: number;
+      text?: string;
+      url?: string;
+    }>;
+    pictures?: Array<{
+      img_src?: string;
+      img_width?: number;
+      img_height?: number;
+      img_size?: number;
+    }>;
   };
   replies?: BilibiliRawComment[];
 }
@@ -413,6 +425,39 @@ function parseVideoInfo(data: BilibiliVideoInfoResponse['data']): BilibiliVideo 
 
 function parseComment(comment: BilibiliRawComment): BilibiliComment {
   const avatar = comment.member?.avatar || '';
+  const emotes: BilibiliComment['emotes'] = {};
+
+  for (const [token, emote] of Object.entries(comment.content?.emote || {})) {
+    const url = normalizeBilibiliUrl(emote?.url);
+
+    if (!url) {
+      continue;
+    }
+
+    emotes[token] = {
+      id: emote?.id,
+      packageId: emote?.package_id,
+      text: emote?.text || token,
+      url,
+    };
+  }
+
+  const pictures: BilibiliComment['pictures'] = [];
+
+  for (const picture of comment.content?.pictures || []) {
+    const imgSrc = normalizeBilibiliUrl(picture?.img_src);
+
+    if (!imgSrc) {
+      continue;
+    }
+
+    pictures.push({
+      imgSrc,
+      imgWidth: picture?.img_width,
+      imgHeight: picture?.img_height,
+      imgSize: picture?.img_size,
+    });
+  }
 
   return {
     rpid: comment.rpid,
@@ -421,9 +466,19 @@ function parseComment(comment: BilibiliRawComment): BilibiliComment {
     uname: comment.member?.uname || '',
     avatar: avatar.startsWith('//') ? `https:${avatar}` : avatar,
     message: comment.content?.message || '',
+    emotes,
+    pictures,
     like: comment.like,
     ctime: comment.ctime,
     parent: comment.parent,
     rcount: comment.rcount,
   };
+}
+
+function normalizeBilibiliUrl(url?: string): string {
+  if (!url) {
+    return '';
+  }
+
+  return url.startsWith('//') ? `https:${url}` : url;
 }

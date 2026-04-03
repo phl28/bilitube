@@ -14,6 +14,9 @@ interface CommentThread<T> {
   totalReplies: number;
 }
 
+type PlatformComment = YouTubeComment | BilibiliComment;
+type PlatformCommentThread = CommentThread<PlatformComment>;
+
 export default function VideoPage({ params }: VideoPageProps) {
   const { id } = use(params);
   const [match, setMatch] = useState<VideoMatch | null>(null);
@@ -370,7 +373,7 @@ function ThreadedCommentSection({
       ) : (
         <div>
           <div className="space-y-0">
-            {(threads as CommentThread<any>[]).map((thread) => (
+            {(threads as PlatformCommentThread[]).map((thread) => (
               <CommentThreadView
                 key={platform === 'youtube' ? (thread.comment as YouTubeComment).id : `bili-${(thread.comment as BilibiliComment).rpid}`}
                 thread={thread}
@@ -397,11 +400,11 @@ function CommentThreadView({
   thread,
   platform,
 }: {
-  thread: CommentThread<any>;
+  thread: PlatformCommentThread;
   platform: 'youtube' | 'bilibili';
 }) {
   const [showReplies, setShowReplies] = useState(false);
-  const [fetchedReplies, setFetchedReplies] = useState<any[]>([]);
+  const [fetchedReplies, setFetchedReplies] = useState<PlatformComment[]>([]);
   const [repliesPage, setRepliesPage] = useState(1);
   const [repliesHasMore, setRepliesHasMore] = useState(false);
   const [loadingReplies, setLoadingReplies] = useState(false);
@@ -493,9 +496,9 @@ function CommentThreadView({
                 {loadingReplies && displayReplies.length === 0 ? (
                   <p className="text-xs text-muted py-2">Loading replies...</p>
                 ) : (
-                  displayReplies.map((reply: any) => (
+                  displayReplies.map((reply) => (
                     <SingleComment
-                      key={platform === 'youtube' ? reply.id : `bili-${reply.rpid}`}
+                      key={platform === 'youtube' ? (reply as YouTubeComment).id : `bili-${(reply as BilibiliComment).rpid}`}
                       comment={reply}
                       platform={platform}
                       isReply
@@ -612,9 +615,32 @@ function SingleComment({
               />
             )
           ) : (
-            <p className={`leading-relaxed break-words ${isReply ? 'text-xs' : 'text-sm'}`}>
-              {showTranslation && translatedText ? translatedText : biliComment!.message}
-            </p>
+            <div className={`leading-relaxed break-words ${isReply ? 'text-xs' : 'text-sm'}`}>
+              <div className="whitespace-pre-wrap">
+                {showTranslation && translatedText
+                  ? translatedText
+                  : renderBilibiliText(biliComment!.message, biliComment!.emotes)}
+              </div>
+              {biliComment!.pictures.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {biliComment!.pictures.map((picture, index) => (
+                    <a
+                      key={`${picture.imgSrc}-${index}`}
+                      href={picture.imgSrc}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <img
+                        src={proxyImageUrl(picture.imgSrc)}
+                        alt={`Comment attachment ${index + 1}`}
+                        className="max-w-[160px] max-h-[160px] rounded-lg object-cover border border-border"
+                      />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <div className={`mt-1 flex items-center gap-3 text-muted ${isReply ? 'text-[11px]' : 'text-xs'}`}>
             <span>{formatLikeCount(isYouTube ? ytComment!.likeCount : biliComment!.like)} likes</span>
@@ -715,4 +741,37 @@ function formatTimeAgo(dateString: string): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 30) return `${diffDays}d ago`;
   return date.toLocaleDateString();
+}
+
+function proxyImageUrl(url: string): string {
+  return `/api/image?url=${encodeURIComponent(url)}`;
+}
+
+function renderBilibiliText(text: string, emotes: BilibiliComment['emotes']) {
+  if (!emotes || Object.keys(emotes).length === 0) {
+    return <>{text}</>;
+  }
+
+  const parts = text.split(/(\[.*?\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('[') && part.endsWith(']')) {
+          const emote = emotes[part];
+          if (emote?.url) {
+            return (
+              <img
+                key={i}
+                src={proxyImageUrl(emote.url)}
+                alt={emote.text}
+                className="inline-block h-6 w-auto align-middle mx-0.5"
+                title={emote.text}
+              />
+            );
+          }
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
 }
