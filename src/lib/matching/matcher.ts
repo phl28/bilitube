@@ -3,9 +3,7 @@ import * as bilibili from '@/lib/bilibili';
 import { compareThumbnails } from './thumbnail';
 
 interface MatchConfig {
-  strongThumbnailSimilarity: number;
-  minimumThumbnailSimilarity: number;
-  weakThumbnailSimilarity: number;
+  thumbnailSimilarityThreshold: number;
   durationToleranceSeconds: number;
   exactDurationToleranceSeconds: number;
   titleSimilarityThreshold: number;
@@ -18,9 +16,7 @@ interface MatchConfig {
 }
 
 const DEFAULT_CONFIG: MatchConfig = {
-  strongThumbnailSimilarity: 0.74,
-  minimumThumbnailSimilarity: 0.6,
-  weakThumbnailSimilarity: 0.5,
+  thumbnailSimilarityThreshold: 0.75,
   durationToleranceSeconds: 30,
   exactDurationToleranceSeconds: 2,
   titleSimilarityThreshold: 0.92,
@@ -83,8 +79,8 @@ async function matchByThumbnail(
     let confidence = 0;
     let method: BilibiliReupload['matchMethod'] = 'title';
 
-    if (similarity >= config.strongThumbnailSimilarity) {
-      confidence = 0.78 + (similarity - config.strongThumbnailSimilarity) * 0.8;
+    if (similarity >= config.thumbnailSimilarityThreshold) {
+      confidence = 0.78 + (similarity - config.thumbnailSimilarityThreshold) * 0.8;
       method = 'thumbnail';
 
       if (durationMatches) {
@@ -97,24 +93,6 @@ async function matchByThumbnail(
 
       if (titleSimilarity >= config.titleSimilarityThreshold) {
         confidence += 0.02;
-      }
-    } else if (similarity >= config.minimumThumbnailSimilarity && durationMatches) {
-      confidence = 0.64 + (similarity - config.minimumThumbnailSimilarity) * 0.7;
-      method = 'thumbnail';
-
-      if (exactDurationMatch) {
-        confidence += 0.08;
-      }
-
-      if (titleSimilarity >= config.titleSimilarityThreshold) {
-        confidence += 0.03;
-      }
-    } else if (similarity >= config.weakThumbnailSimilarity && exactDurationMatch) {
-      confidence = 0.52 + (similarity - config.weakThumbnailSimilarity) * 0.55;
-      method = 'thumbnail';
-
-      if (titleSimilarity >= config.titleSimilarityThreshold) {
-        confidence += 0.03;
       }
     } else {
       if (durationMatches && titleSimilarity >= config.veryHighTitleSimilarity) {
@@ -142,6 +120,13 @@ async function matchByThumbnail(
 
 function generateSearchQueries(youtubeVideo: YouTubeVideo): string[] {
   const queries = new Set<string>();
+  const cleanedTitle = youtubeVideo.title
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(.*?\)/g, '')
+    .replace(/【.*?】/g, '')
+    .replace(/「.*?」/g, '')
+    .trim();
+  const titleKeywords = extractTitleKeywords(cleanedTitle);
 
   const addQuery = (query: string) => {
     const cleaned = query.replace(/\s+/g, ' ').trim();
@@ -151,13 +136,24 @@ function generateSearchQueries(youtubeVideo: YouTubeVideo): string[] {
   };
 
   addQuery(youtubeVideo.channelTitle);
+  addQuery(`${youtubeVideo.channelTitle} ${youtubeVideo.title}`);
+  addQuery(youtubeVideo.title);
+
+  if (cleanedTitle !== youtubeVideo.title && cleanedTitle.length > 10) {
+    addQuery(cleanedTitle);
+  }
+
+  if (titleKeywords.length >= 2) {
+    addQuery(`${youtubeVideo.channelTitle} ${titleKeywords.slice(0, 2).join(' ')}`);
+    addQuery(titleKeywords.slice(0, 3).join(' '));
+  }
 
   if (youtubeVideo.playlistTitle) {
     addQuery(`${youtubeVideo.channelTitle} ${youtubeVideo.playlistTitle}`);
     addQuery(youtubeVideo.playlistTitle);
   }
 
-  for (const tag of selectSearchTags(youtubeVideo.tags || [])) {
+  for (const tag of selectSearchTags(youtubeVideo.tags || [], youtubeVideo)) {
     addQuery(`${youtubeVideo.channelTitle} ${tag}`);
     addQuery(tag);
   }
@@ -165,27 +161,6 @@ function generateSearchQueries(youtubeVideo: YouTubeVideo): string[] {
   for (const phrase of extractDescriptionPhrases(youtubeVideo.description)) {
     addQuery(`${youtubeVideo.channelTitle} ${phrase}`);
     addQuery(phrase);
-  }
-
-  addQuery(`${youtubeVideo.channelTitle} ${youtubeVideo.title}`);
-  addQuery(youtubeVideo.title);
-
-  const cleanedTitle = youtubeVideo.title
-    .replace(/\[.*?\]/g, '')
-    .replace(/\(.*?\)/g, '')
-    .replace(/【.*?】/g, '')
-    .replace(/「.*?」/g, '')
-    .trim();
-
-  if (cleanedTitle !== youtubeVideo.title && cleanedTitle.length > 10) {
-    addQuery(cleanedTitle);
-  }
-
-  const titleKeywords = extractTitleKeywords(cleanedTitle);
-
-  if (titleKeywords.length >= 2) {
-    addQuery(`${youtubeVideo.channelTitle} ${titleKeywords.slice(0, 2).join(' ')}`);
-    addQuery(titleKeywords.slice(0, 3).join(' '));
   }
 
   return Array.from(queries).slice(0, DEFAULT_CONFIG.maxQueries);
@@ -210,14 +185,28 @@ function extractDescriptionPhrases(description: string): string[] {
   return Array.from(phrases).slice(0, 3);
 }
 
-function selectSearchTags(tags: string[]): string[] {
+function selectSearchTags(tags: string[], youtubeVideo: Pick<YouTubeVideo, 'title' | 'channelTitle'>): string[] {
+  const titleText = normalizeSearchText(youtubeVideo.title);
+  const channelText = normalizeSearchText(youtubeVideo.channelTitle);
+
   const cleaned = tags
     .map((tag) => tag.replace(/\s+/g, ' ').trim())
     .filter((tag) => tag.length >= 4)
-    .filter((tag) => !/^#/.test(tag));
+    .filter((tag) => !/^#/.test(tag))
+    .filter((tag) => scoreTag(tag) > 0)
+    .filter((tag) => {
+      const normalizedTag = normalizeSearchText(tag);
+      return normalizedTag.length > 0
+        && !titleText.includes(normalizedTag)
+        && !channelText.includes(normalizedTag);
+    });
 
   const ranked = cleaned.sort((left, right) => scoreTag(right) - scoreTag(left));
   return ranked.slice(0, 4);
+}
+
+function normalizeSearchText(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 function scoreTag(tag: string): number {

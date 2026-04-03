@@ -1,6 +1,8 @@
 import db, { initDatabase } from './client';
 import { YouTubeVideo, VideoMatch, BilibiliReupload, BilibiliVideo } from '@/types';
 
+const MINIMUM_CACHED_THUMBNAIL_CONFIDENCE = 0.78;
+
 export interface CommentTranslationRecord {
   id: number;
   textHash: string;
@@ -24,7 +26,7 @@ export async function getVideoMatch(youtubeId: string): Promise<VideoMatch | nul
   if (!youtubeRow) return null;
 
   const bilibiliResult = await db.execute({
-    sql: 'SELECT * FROM bilibili_reuploads WHERE youtube_id = ? ORDER BY views DESC',
+    sql: 'SELECT * FROM bilibili_reuploads WHERE youtube_id = ? ORDER BY match_confidence DESC, views DESC, comments DESC',
     args: [youtubeId],
   });
 
@@ -43,24 +45,7 @@ export async function getVideoMatch(youtubeId: string): Promise<VideoMatch | nul
     publishedAt: '',
   };
 
-  const bilibiliReuploads: BilibiliReupload[] = bilibiliResult.rows.map((row) => ({
-    video: {
-      bvid: row.bvid as string,
-      aid: row.aid as number,
-      title: row.title as string,
-      description: '',
-      uploaderMid: 0,
-      uploaderName: row.uploader_name as string,
-      thumbnailUrl: row.thumbnail as string,
-      durationSeconds: row.duration as number,
-      viewCount: row.views as number,
-      commentCount: row.comments as number,
-      likeCount: row.likes as number,
-      publishedAtTimestamp: 0,
-    },
-    matchConfidence: row.match_confidence as number,
-    matchMethod: row.match_method as BilibiliReupload['matchMethod'],
-  }));
+  const bilibiliReuploads = sanitizeStoredReuploads(bilibiliResult.rows.map(mapRowToReupload));
 
   return {
     youtubeVideo,
@@ -187,7 +172,7 @@ export async function getRecentMatches(limit: number = 12): Promise<VideoMatch[]
 
   for (const row of result.rows) {
     const bilibiliResult = await db.execute({
-      sql: 'SELECT * FROM bilibili_reuploads WHERE youtube_id = ? ORDER BY views DESC',
+      sql: 'SELECT * FROM bilibili_reuploads WHERE youtube_id = ? ORDER BY match_confidence DESC, views DESC, comments DESC',
       args: [row.youtube_id as string],
     });
 
@@ -206,24 +191,7 @@ export async function getRecentMatches(limit: number = 12): Promise<VideoMatch[]
       publishedAt: '',
     };
 
-    const bilibiliReuploads: BilibiliReupload[] = bilibiliResult.rows.map((r) => ({
-      video: {
-        bvid: r.bvid as string,
-        aid: r.aid as number,
-        title: r.title as string,
-        description: '',
-        uploaderMid: 0,
-        uploaderName: r.uploader_name as string,
-        thumbnailUrl: r.thumbnail as string,
-        durationSeconds: r.duration as number,
-        viewCount: r.views as number,
-        commentCount: r.comments as number,
-        likeCount: r.likes as number,
-        publishedAtTimestamp: 0,
-      },
-      matchConfidence: r.match_confidence as number,
-      matchMethod: r.match_method as BilibiliReupload['matchMethod'],
-    }));
+    const bilibiliReuploads = sanitizeStoredReuploads(bilibiliResult.rows.map(mapRowToReupload));
 
     matches.push({
       youtubeVideo,
@@ -245,6 +213,36 @@ export async function getAdminCorrections(youtubeId: string) {
   });
 
   return result.rows;
+}
+
+function mapRowToReupload(row: Record<string, unknown>): BilibiliReupload {
+  return {
+    video: {
+      bvid: row.bvid as string,
+      aid: row.aid as number,
+      title: row.title as string,
+      description: '',
+      uploaderMid: 0,
+      uploaderName: row.uploader_name as string,
+      thumbnailUrl: row.thumbnail as string,
+      durationSeconds: row.duration as number,
+      viewCount: row.views as number,
+      commentCount: row.comments as number,
+      likeCount: row.likes as number,
+      publishedAtTimestamp: 0,
+    },
+    matchConfidence: row.match_confidence as number,
+    matchMethod: row.match_method as BilibiliReupload['matchMethod'],
+  };
+}
+
+function sanitizeStoredReuploads(reuploads: BilibiliReupload[]): BilibiliReupload[] {
+  return reuploads
+    .filter((reupload) => reupload.matchMethod !== 'thumbnail'
+      || reupload.matchConfidence >= MINIMUM_CACHED_THUMBNAIL_CONFIDENCE)
+    .sort((left, right) => right.matchConfidence - left.matchConfidence
+      || right.video.viewCount - left.video.viewCount
+      || right.video.commentCount - left.video.commentCount);
 }
 
 export async function getCommentTranslation(
