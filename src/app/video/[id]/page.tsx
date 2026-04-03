@@ -484,7 +484,7 @@ function SingleComment({
     <div className={`py-2 ${isReply ? '' : ''}`}>
       <div className="flex items-start gap-3">
         <img
-          src={isYouTube ? ytComment!.authorProfileImageUrl : `/api/image?url=${encodeURIComponent(biliComment!.avatar)}`}
+          src={proxyImageUrl(isYouTube ? ytComment!.authorProfileImageUrl : biliComment!.avatar)}
           alt=""
           className={`rounded-full shrink-0 ${isReply ? 'w-6 h-6' : 'w-8 h-8'}`}
         />
