@@ -2,18 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { addAdminCorrection, addBilibiliReupload, removeBilibiliReupload } from '@/lib/db';
 import { getVideoByBvid } from '@/lib/bilibili/client';
 
-const ADMIN_KEY = process.env.ADMIN_API_KEY;
-
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('x-admin-key');
-    if (!ADMIN_KEY || authHeader !== ADMIN_KEY) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     const body = await request.json();
     const { youtubeId, bvid, action } = body;
 

@@ -9,19 +9,12 @@ export default function AdminPage() {
   const [result, setResult] = useState<string>('');
   const [error, setError] = useState('');
 
-  async function handleAddMatch(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(action: 'add' | 'remove') {
     setLoading(true);
     setResult('');
     setError('');
 
     try {
-      const apiKey = prompt('Enter admin API key:');
-      if (!apiKey) {
-        setError('API key required');
-        return;
-      }
-
       const youtubeId = extractYoutubeId(youtubeUrl);
       if (!youtubeId) {
         setError('Invalid YouTube URL');
@@ -30,75 +23,24 @@ export default function AdminPage() {
 
       const response = await fetch('/api/admin/correct', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': apiKey,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           youtubeId,
           bvid: bvid || null,
-          action: 'add',
+          action,
         }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setResult('Match added successfully');
+        setResult(action === 'add' ? 'Match added successfully' : 'Match removed successfully');
         setYoutubeUrl('');
         setBvid('');
       } else {
-        setError(data.error || 'Failed to add match');
+        setError(data.error || `Failed to ${action} match`);
       }
-    } catch (err) {
-      setError('An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRemoveMatch(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setResult('');
-    setError('');
-
-    try {
-      const apiKey = prompt('Enter admin API key:');
-      if (!apiKey) {
-        setError('API key required');
-        return;
-      }
-
-      const youtubeId = extractYoutubeId(youtubeUrl);
-      if (!youtubeId) {
-        setError('Invalid YouTube URL');
-        return;
-      }
-
-      const response = await fetch('/api/admin/correct', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': apiKey,
-        },
-        body: JSON.stringify({
-          youtubeId,
-          bvid: bvid || null,
-          action: 'remove',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setResult('Match removed successfully');
-        setYoutubeUrl('');
-        setBvid('');
-      } else {
-        setError(data.error || 'Failed to remove match');
-      }
-    } catch (err) {
+    } catch {
       setError('An error occurred');
     } finally {
       setLoading(false);
@@ -141,14 +83,14 @@ export default function AdminPage() {
 
           <div className="flex gap-3 pt-1">
             <button
-              onClick={handleAddMatch}
+              onClick={() => handleSubmit('add')}
               disabled={loading || !youtubeUrl.trim()}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
             >
               {loading ? 'Adding...' : 'Add Match'}
             </button>
             <button
-              onClick={handleRemoveMatch}
+              onClick={() => handleSubmit('remove')}
               disabled={loading || !youtubeUrl.trim()}
               className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
             >
@@ -163,14 +105,6 @@ export default function AdminPage() {
             <p className="text-accent text-sm">{error}</p>
           )}
         </div>
-      </div>
-
-      <div className="mt-6 bg-surface rounded-xl p-5">
-        <h2 className="text-base font-semibold mb-2">API Key</h2>
-        <p className="text-sm text-muted">
-          The admin API key is stored in the <code className="px-1.5 py-0.5 bg-surface-hover rounded text-xs">ADMIN_API_KEY</code> environment variable.
-          You will be prompted to enter it when making changes.
-        </p>
       </div>
     </div>
   );

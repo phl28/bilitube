@@ -14,6 +14,11 @@ export interface CommentTranslationRecord {
   createdAt: string;
 }
 
+export interface BilibiliVideoIdentifier {
+  bvid?: string | null;
+  aid?: number | null;
+}
+
 export async function getVideoMatch(youtubeId: string): Promise<VideoMatch | null> {
   await initDatabase();
 
@@ -53,6 +58,38 @@ export async function getVideoMatch(youtubeId: string): Promise<VideoMatch | nul
     verified: youtubeRow.verified === 1,
     matchMethod: bilibiliReuploads[0]?.matchMethod || 'title',
   };
+}
+
+export async function getVideoMatchByBilibiliId(
+  identifier: BilibiliVideoIdentifier
+): Promise<VideoMatch | null> {
+  await initDatabase();
+
+  if (identifier.bvid) {
+    const bvidResult = await db.execute({
+      sql: 'SELECT youtube_id FROM bilibili_reuploads WHERE bvid = ? LIMIT 1',
+      args: [identifier.bvid],
+    });
+
+    const youtubeId = bvidResult.rows[0]?.youtube_id as string | undefined;
+    if (youtubeId) {
+      return getVideoMatch(youtubeId);
+    }
+  }
+
+  if (identifier.aid != null) {
+    const aidResult = await db.execute({
+      sql: 'SELECT youtube_id FROM bilibili_reuploads WHERE aid = ? LIMIT 1',
+      args: [identifier.aid],
+    });
+
+    const youtubeId = aidResult.rows[0]?.youtube_id as string | undefined;
+    if (youtubeId) {
+      return getVideoMatch(youtubeId);
+    }
+  }
+
+  return null;
 }
 
 export async function saveVideoMatch(match: VideoMatch): Promise<void> {

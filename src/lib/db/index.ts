@@ -1,6 +1,7 @@
 export { default as db, initDatabase } from './client';
 export {
   getVideoMatch,
+  getVideoMatchByBilibiliId,
   saveVideoMatch,
   addAdminCorrection,
   getAdminCorrections,
