@@ -1,8 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo, use } from 'react';
+import { useState, useMemo, use } from 'react';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { detectCommentLanguage } from '@/lib/comment-language';
-import { VideoMatch, YouTubeComment, BilibiliComment } from '@/types';
+import { VideoMatch, YouTubeVideo, YouTubeComment, BilibiliComment } from '@/types';
+import {
+  queryKeys,
+  fetchVideoInfo,
+  fetchVideoMatch,
+  fetchYoutubeComments,
+  fetchBilibiliComments,
+  fetchBilibiliReplies,
+} from '@/lib/queries';
 
 interface VideoPageProps {
   params: Promise<{ id: string }>;
@@ -19,143 +28,55 @@ type PlatformCommentThread = CommentThread<PlatformComment>;
 
 export default function VideoPage({ params }: VideoPageProps) {
   const { id } = use(params);
-  const [match, setMatch] = useState<VideoMatch | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
   const [sortBy, setSortBy] = useState<'top' | 'new' | 'hot'>('top');
-  const [youtubeComments, setYoutubeComments] = useState<YouTubeComment[]>([]);
-  const [bilibiliComments, setBilibiliComments] = useState<BilibiliComment[]>([]);
-  const [youtubeCommentTotal, setYoutubeCommentTotal] = useState(0);
-  const [bilibiliCommentTotal, setBilibiliCommentTotal] = useState(0);
-  const [youtubeNextPage, setYoutubeNextPage] = useState<string | undefined>();
-  const [bilibiliCursor, setBilibiliCursor] = useState<string | undefined>();
-  const [bilibiliHasMore, setBilibiliHasMore] = useState(false);
   const [selectedBilibili, setSelectedBilibili] = useState<string | null>(null);
-  const [loadingComments, setLoadingComments] = useState(false);
-  const [loadingMore, setLoadingMore] = useState<'youtube' | 'bilibili' | null>(null);
 
-  useEffect(() => {
-    fetchVideoMatch();
-  }, [id]);
+  const { data: videoInfo } = useQuery({
+    queryKey: queryKeys.videoInfo(id),
+    queryFn: () => fetchVideoInfo(id),
+  });
 
-  useEffect(() => {
-    if (match) {
-      fetchComments();
-    }
-  }, [match, sortBy, selectedBilibili]);
+  const { data: match, isPending: matchLoading, error: matchError } = useQuery({
+    queryKey: queryKeys.videoMatch(id),
+    queryFn: () => fetchVideoMatch(id),
+  });
 
-  async function fetchVideoMatch() {
-    try {
-      const response = await fetch(`/api/video/match?id=${id}`);
-      const data = await response.json();
+  const activeBilibili = selectedBilibili ?? match?.bilibiliReuploads[0]?.video.aid.toString() ?? null;
+  const youtubeVideo = videoInfo ?? match?.youtubeVideo ?? null;
+  const error = matchError ? (matchError instanceof Error ? matchError.message : 'Failed to load video data') : '';
 
-      if (!data.success) {
-        setError(data.error || 'Failed to load video');
-        return;
-      }
+  const ytComments = useInfiniteQuery({
+    queryKey: queryKeys.youtubeComments(id, sortBy),
+    queryFn: ({ pageParam }) => fetchYoutubeComments({ id, sortBy, pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextPageToken,
+  });
 
-      setMatch(data.data);
+  const biliComments = useInfiniteQuery({
+    queryKey: queryKeys.bilibiliComments(activeBilibili!, sortBy),
+    queryFn: ({ pageParam }) => fetchBilibiliComments({ aid: activeBilibili!, sortBy, pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextOffset : undefined,
+    enabled: !!activeBilibili,
+  });
 
-      if (data.data.bilibiliReuploads.length > 0) {
-        setSelectedBilibili(data.data.bilibiliReuploads[0].video.aid.toString());
-      }
-    } catch (err) {
-      setError('Failed to load video data');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const youtubeComments = useMemo(
+    () => ytComments.data?.pages.flatMap((p) => p.comments) ?? [],
+    [ytComments.data],
+  );
+  const bilibiliCommentsList = useMemo(
+    () => biliComments.data?.pages.flatMap((p) => p.comments) ?? [],
+    [biliComments.data],
+  );
+  const youtubeCommentTotal = ytComments.data?.pages[0]?.totalCount ?? 0;
+  const bilibiliCommentTotal = biliComments.data?.pages[0]?.totalCount ?? 0;
 
-  async function fetchComments() {
-    if (!match) return;
-
-    setLoadingComments(true);
-    setYoutubeComments([]);
-    setBilibiliComments([]);
-    setYoutubeNextPage(undefined);
-    setBilibiliCursor(undefined);
-    setBilibiliHasMore(false);
-
-    try {
-      const p = new URLSearchParams();
-      p.set('youtubeId', match.youtubeVideo.id);
-      if (selectedBilibili) {
-        p.set('bilibiliAid', selectedBilibili);
-      }
-      p.set('sortBy', sortBy);
-      p.set('pageSize', '100');
-
-      const response = await fetch(`/api/video/comments?${p.toString()}`);
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        setYoutubeComments(data.data.youtube?.comments || []);
-        setBilibiliComments(data.data.bilibili?.comments || []);
-        setYoutubeCommentTotal(data.data.youtube?.totalCount || 0);
-        setBilibiliCommentTotal(data.data.bilibili?.totalCount || 0);
-        setYoutubeNextPage(data.data.youtube?.nextPageToken);
-        setBilibiliCursor(data.data.bilibili?.nextOffset);
-        setBilibiliHasMore(data.data.bilibili?.hasMore ?? false);
-      }
-    } catch (err) {
-      console.error('Failed to fetch comments:', err);
-    } finally {
-      setLoadingComments(false);
-    }
-  }
-
-  async function loadMoreYoutube() {
-    if (!match || !youtubeNextPage || loadingMore) return;
-    setLoadingMore('youtube');
-    try {
-      const p = new URLSearchParams();
-      p.set('youtubeId', match.youtubeVideo.id);
-      p.set('sortBy', sortBy);
-      p.set('pageSize', '100');
-      p.set('pageToken', youtubeNextPage);
-
-      const response = await fetch(`/api/video/comments?${p.toString()}`);
-      const data = await response.json();
-
-      if (data.success && data.data?.youtube) {
-        setYoutubeComments((prev) => [...prev, ...data.data.youtube.comments]);
-        setYoutubeNextPage(data.data.youtube.nextPageToken);
-      }
-    } catch (err) {
-      console.error('Failed to load more YouTube comments:', err);
-    } finally {
-      setLoadingMore(null);
-    }
-  }
-
-  async function loadMoreBilibili() {
-    if (!match || !selectedBilibili || !bilibiliHasMore || loadingMore) return;
-    setLoadingMore('bilibili');
-    try {
-      const p = new URLSearchParams();
-      p.set('bilibiliAid', selectedBilibili);
-      p.set('sortBy', sortBy);
-      if (bilibiliCursor) {
-        p.set('bilibiliCursor', bilibiliCursor);
-      }
-
-      const response = await fetch(`/api/video/comments?${p.toString()}`);
-      const data = await response.json();
-
-      if (data.success && data.data?.bilibili) {
-        setBilibiliComments((prev) => [...prev, ...data.data.bilibili.comments]);
-        setBilibiliCursor(data.data.bilibili.nextOffset);
-        setBilibiliHasMore(data.data.bilibili.hasMore ?? false);
-      }
-    } catch (err) {
-      console.error('Failed to load more Bilibili comments:', err);
-    } finally {
-      setLoadingMore(null);
-    }
-  }
+  const loadingYoutubeComments = ytComments.isPending;
+  const loadingBilibiliComments = biliComments.isPending;
 
   const youtubeThreads = useMemo(() => threadYoutubeComments(youtubeComments), [youtubeComments]);
-  const bilibiliThreads = useMemo(() => threadBilibiliComments(bilibiliComments), [bilibiliComments]);
+  const bilibiliThreads = useMemo(() => threadBilibiliComments(bilibiliCommentsList), [bilibiliCommentsList]);
 
   const sortedReuploads = useMemo(() =>
     [...match?.bilibiliReuploads ?? []].sort((a, b) =>
@@ -164,23 +85,14 @@ export default function VideoPage({ params }: VideoPageProps) {
       || b.video.commentCount - a.video.commentCount
     ), [match?.bilibiliReuploads]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-muted">Loading...</div>
-      </div>
-    );
-  }
+  const isRefreshing = !matchLoading && (ytComments.isFetching || biliComments.isFetching);
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-accent">{error}</div>
-      </div>
-    );
+  function handleRefresh() {
+    queryClient.invalidateQueries({ queryKey: queryKeys.youtubeComments(id, sortBy) });
+    if (activeBilibili) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.bilibiliComments(activeBilibili, sortBy) });
+    }
   }
-
-  if (!match) return null;
 
   return (
     <div className="max-w-[1280px] mx-auto px-6 py-4">
@@ -188,7 +100,7 @@ export default function VideoPage({ params }: VideoPageProps) {
         <div className="lg:mr-[404px]">
           <div className="aspect-video bg-black rounded-xl overflow-hidden">
             <iframe
-              src={`https://www.youtube.com/embed/${match.youtubeVideo.id}`}
+              src={`https://www.youtube.com/embed/${id}`}
               className="w-full h-full"
               allowFullScreen
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -197,48 +109,74 @@ export default function VideoPage({ params }: VideoPageProps) {
         </div>
 
         <div className="mt-4 lg:mt-0 lg:absolute lg:top-0 lg:right-0 lg:bottom-0 lg:w-[380px] flex flex-col">
-          <h2 className="text-base font-semibold mb-3 shrink-0">
-            Bilibili Reuploads ({sortedReuploads.length})
-          </h2>
-
-          {sortedReuploads.length === 0 ? (
-            <p className="text-muted text-sm">No Bilibili reuploads found.</p>
+          {error ? (
+            <>
+              <h2 className="text-base font-semibold mb-3 shrink-0">Bilibili Reuploads</h2>
+              <p className="text-sm text-red-500">{error}</p>
+            </>
           ) : (
-            <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
-              {sortedReuploads.map((reupload) => (
-                <BilibiliCard
-                  key={reupload.video.bvid}
-                  reupload={reupload}
-                  isSelected={selectedBilibili === reupload.video.aid.toString()}
-                  onSelect={() => setSelectedBilibili(reupload.video.aid.toString())}
-                />
-              ))}
-            </div>
-          )}
+            <>
+              <h2 className="text-base font-semibold mb-3 shrink-0 flex items-center gap-2">
+                Bilibili Reuploads ({matchLoading ? '...' : sortedReuploads.length})
+                {matchLoading && (
+                  <svg className="w-3.5 h-3.5 animate-spin text-muted" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                )}
+              </h2>
 
-          <div className="bg-surface rounded-xl p-4 mt-4 shrink-0">
-            <h3 className="text-sm font-semibold mb-2">Match Info</h3>
-            <dl className="text-sm space-y-1.5">
-              <div className="flex justify-between">
-                <dt className="text-muted">Method</dt>
-                <dd className="capitalize">{match.matchMethod}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">Verified</dt>
-                <dd>{match.verified ? 'Yes' : 'No'}</dd>
-              </div>
-            </dl>
-          </div>
+              {!matchLoading && sortedReuploads.length === 0 ? (
+                <p className="text-muted text-sm">No Bilibili reuploads found.</p>
+              ) : sortedReuploads.length > 0 ? (
+                <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+                  {sortedReuploads.map((reupload) => (
+                    <BilibiliCard
+                      key={reupload.video.bvid}
+                      reupload={reupload}
+                      isSelected={activeBilibili === reupload.video.aid.toString()}
+                      onSelect={() => setSelectedBilibili(reupload.video.aid.toString())}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {!matchLoading && match && (
+                <div className="bg-surface rounded-xl p-4 mt-4 shrink-0">
+                  <h3 className="text-sm font-semibold mb-2">Match Info</h3>
+                  <dl className="text-sm space-y-1.5">
+                    <div className="flex justify-between">
+                      <dt className="text-muted">Method</dt>
+                      <dd className="capitalize">{match.matchMethod}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-muted">Verified</dt>
+                      <dd>{match.verified ? 'Yes' : 'No'}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
       <div className="mt-3">
-        <h1 className="text-lg font-semibold leading-snug">
-          {match.youtubeVideo.title}
-        </h1>
-        <p className="text-sm text-muted mt-1">
-          {match.youtubeVideo.channelTitle} &middot; {formatViewCount(match.youtubeVideo.viewCount)} views
-        </p>
+        {youtubeVideo ? (
+          <>
+            <h1 className="text-lg font-semibold leading-snug">
+              {youtubeVideo.title}
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              {youtubeVideo.channelTitle} &middot; {formatViewCount(youtubeVideo.viewCount)} views
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="h-5 w-3/4 bg-surface-hover rounded animate-pulse" />
+            <div className="h-4 w-1/3 bg-surface-hover rounded animate-pulse mt-2" />
+          </>
+        )}
       </div>
 
       <div className="mt-6 border-t border-border pt-4">
@@ -255,11 +193,11 @@ export default function VideoPage({ params }: VideoPageProps) {
               <option value="hot">Hot</option>
             </select>
             <button
-              onClick={() => fetchComments()}
-              disabled={loadingComments}
+              onClick={handleRefresh}
+              disabled={isRefreshing}
               className="px-3 py-1.5 bg-surface-hover hover:bg-border disabled:opacity-40 text-foreground rounded-lg text-sm transition-colors"
             >
-              {loadingComments ? 'Loading...' : 'Refresh'}
+              {isRefreshing ? 'Loading...' : 'Refresh'}
             </button>
           </div>
         </div>
@@ -271,24 +209,24 @@ export default function VideoPage({ params }: VideoPageProps) {
               platform="youtube"
               threads={youtubeThreads}
               totalCount={youtubeCommentTotal}
-              loading={loadingComments}
-              hasMore={!!youtubeNextPage}
-              loadingMore={loadingMore === 'youtube'}
-              onLoadMore={loadMoreYoutube}
+              loading={loadingYoutubeComments}
+              hasMore={ytComments.hasNextPage}
+              loadingMore={ytComments.isFetchingNextPage}
+              onLoadMore={() => ytComments.fetchNextPage()}
             />
           </div>
 
-          {selectedBilibili && (
+          {activeBilibili && (
             <div>
               <ThreadedCommentSection
                 title="Bilibili Comments"
                 platform="bilibili"
                 threads={bilibiliThreads}
                 totalCount={bilibiliCommentTotal}
-                loading={loadingComments}
-                hasMore={bilibiliHasMore}
-                loadingMore={loadingMore === 'bilibili'}
-                onLoadMore={loadMoreBilibili}
+                loading={loadingBilibiliComments}
+                hasMore={biliComments.hasNextPage}
+                loadingMore={biliComments.isFetchingNextPage}
+                onLoadMore={() => biliComments.fetchNextPage()}
               />
             </div>
           )}
@@ -297,6 +235,7 @@ export default function VideoPage({ params }: VideoPageProps) {
     </div>
   );
 }
+
 
 function threadYoutubeComments(comments: YouTubeComment[]): CommentThread<YouTubeComment>[] {
   const topLevel: YouTubeComment[] = [];
@@ -404,67 +343,27 @@ function CommentThreadView({
   platform: 'youtube' | 'bilibili';
 }) {
   const [showReplies, setShowReplies] = useState(false);
-  const [fetchedReplies, setFetchedReplies] = useState<PlatformComment[]>([]);
-  const [repliesPage, setRepliesPage] = useState(1);
-  const [repliesHasMore, setRepliesHasMore] = useState(false);
-  const [loadingReplies, setLoadingReplies] = useState(false);
-  const [hasFetchedAll, setHasFetchedAll] = useState(false);
 
-  const displayReplies = hasFetchedAll ? fetchedReplies : thread.replies;
+  const needsFetch = platform === 'bilibili' && thread.totalReplies > thread.replies.length;
+  const biliComment = platform === 'bilibili' ? (thread.comment as BilibiliComment) : null;
+
+  const repliesQuery = useInfiniteQuery({
+    queryKey: queryKeys.bilibiliReplies(biliComment?.oid ?? 0, biliComment?.rpid ?? 0),
+    queryFn: ({ pageParam }) =>
+      fetchBilibiliReplies({ oid: biliComment!.oid, root: biliComment!.rpid, pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    enabled: showReplies && needsFetch,
+  });
+
+  const fetchedReplies = useMemo(
+    () => repliesQuery.data?.pages.flatMap((p) => p.comments) ?? [],
+    [repliesQuery.data],
+  );
+
+  const displayReplies = (showReplies && needsFetch && repliesQuery.data) ? fetchedReplies : thread.replies;
   const hasReplies = thread.totalReplies > 0 || thread.replies.length > 0;
   const hiddenCount = thread.totalReplies - displayReplies.length;
-
-  async function fetchAllReplies() {
-    if (platform !== 'bilibili' || loadingReplies) return;
-    const biliComment = thread.comment as BilibiliComment;
-    setLoadingReplies(true);
-    try {
-      const p = new URLSearchParams();
-      p.set('oid', biliComment.oid.toString());
-      p.set('root', biliComment.rpid.toString());
-      p.set('page', '1');
-
-      const response = await fetch(`/api/video/replies?${p.toString()}`);
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        setFetchedReplies(data.data.comments);
-        setRepliesHasMore(data.data.hasMore);
-        setRepliesPage(1);
-        setHasFetchedAll(true);
-      }
-    } catch (err) {
-      console.error('Failed to fetch replies:', err);
-    } finally {
-      setLoadingReplies(false);
-    }
-  }
-
-  async function loadMoreReplies() {
-    if (platform !== 'bilibili' || loadingReplies) return;
-    const biliComment = thread.comment as BilibiliComment;
-    const nextPage = repliesPage + 1;
-    setLoadingReplies(true);
-    try {
-      const p = new URLSearchParams();
-      p.set('oid', biliComment.oid.toString());
-      p.set('root', biliComment.rpid.toString());
-      p.set('page', nextPage.toString());
-
-      const response = await fetch(`/api/video/replies?${p.toString()}`);
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        setFetchedReplies((prev) => [...prev, ...data.data.comments]);
-        setRepliesHasMore(data.data.hasMore);
-        setRepliesPage(nextPage);
-      }
-    } catch (err) {
-      console.error('Failed to load more replies:', err);
-    } finally {
-      setLoadingReplies(false);
-    }
-  }
 
   return (
     <div className="py-2.5">
@@ -474,12 +373,7 @@ function CommentThreadView({
         <div className="ml-11 mt-1">
           {!showReplies ? (
             <button
-              onClick={() => {
-                setShowReplies(true);
-                if (platform === 'bilibili' && thread.totalReplies > thread.replies.length && !hasFetchedAll) {
-                  fetchAllReplies();
-                }
-              }}
+              onClick={() => setShowReplies(true)}
               className="text-xs font-medium text-accent hover:text-accent-hover py-1"
             >
               {thread.totalReplies > 0 ? thread.totalReplies : thread.replies.length} {thread.totalReplies === 1 ? 'reply' : 'replies'}
@@ -493,7 +387,7 @@ function CommentThreadView({
                 Hide replies
               </button>
               <div className="space-y-0 border-l-2 border-border pl-4">
-                {loadingReplies && displayReplies.length === 0 ? (
+                {repliesQuery.isPending && needsFetch ? (
                   <p className="text-xs text-muted py-2">Loading replies...</p>
                 ) : (
                   displayReplies.map((reply) => (
@@ -505,13 +399,13 @@ function CommentThreadView({
                     />
                   ))
                 )}
-                {platform === 'bilibili' && hasFetchedAll && repliesHasMore && (
+                {platform === 'bilibili' && repliesQuery.hasNextPage && (
                   <button
-                    onClick={loadMoreReplies}
-                    disabled={loadingReplies}
+                    onClick={() => repliesQuery.fetchNextPage()}
+                    disabled={repliesQuery.isFetchingNextPage}
                     className="text-xs font-medium text-accent hover:text-accent-hover py-2 disabled:opacity-40"
                   >
-                    {loadingReplies ? 'Loading...' : `Show more replies`}
+                    {repliesQuery.isFetchingNextPage ? 'Loading...' : `Show more replies`}
                   </button>
                 )}
                 {platform === 'youtube' && hiddenCount > 0 && (

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import { Toaster } from "sonner";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import Providers from "./providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -55,8 +57,9 @@ export default function RootLayout({
           </div>
         </header>
         <main className="flex-1 w-full">
-          {children}
+          <Providers>{children}</Providers>
         </main>
+        <Toaster />
         <Analytics />
       </body>
     </html>

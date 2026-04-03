@@ -1,40 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { VideoMatch } from '@/types';
+import { extractYoutubeInfo, isBilibiliUrl } from '@/lib/url';
+import { queryKeys, fetchRecentMatches } from '@/lib/queries';
 
 export default function HomePage() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [recentMatches, setRecentMatches] = useState<VideoMatch[]>([]);
-  const [loadingRecent, setLoadingRecent] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    fetchRecentMatches();
-  }, []);
-
-  async function fetchRecentMatches() {
-    try {
-      const response = await fetch('/api/video/recent?limit=12');
-      const data = await response.json();
-      if (data.success) {
-        setRecentMatches(data.data);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingRecent(false);
-    }
-  }
+  const { data: recentMatches = [], isPending: loadingRecent } = useQuery({
+    queryKey: queryKeys.recentMatches(),
+    queryFn: fetchRecentMatches,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
 
+    const ytInfo = extractYoutubeInfo(youtubeUrl.trim());
+    if (ytInfo) {
+      router.push(`/video/${ytInfo.videoId}`);
+      return;
+    }
+
+    if (!isBilibiliUrl(youtubeUrl.trim())) {
+      toast.error('Invalid video URL. Please paste a YouTube or Bilibili link.');
+      return;
+    }
+
+    setLoading(true);
     try {
       const response = await fetch('/api/video/match', {
         method: 'POST',
@@ -45,14 +43,24 @@ export default function HomePage() {
       const data = await response.json();
 
       if (!data.success) {
-        setError(data.error || 'Failed to find video');
+        toast.error(data.error || 'Failed to find video');
         return;
       }
 
-      const youtubeId = data.data.youtubeVideo.id;
+      if (data.hasMatches === false) {
+        toast.info(data.message || 'No matches found for this video.');
+        return;
+      }
+
+      const youtubeId = data.data?.youtubeVideo?.id;
+      if (!youtubeId) {
+        toast.error('Invalid response from server.');
+        return;
+      }
+
       router.push(`/video/${youtubeId}`);
     } catch {
-      setError('An error occurred. Please try again.');
+      toast.error('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -68,7 +76,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-base text-muted max-w-md mx-auto mb-8">
-            Paste a YouTube link to find its Bilibili mirror and read
+            Paste a YouTube or Bilibili link to find its mirror and read
             comments from both platforms side by side.
           </p>
 
@@ -84,7 +92,7 @@ export default function HomePage() {
                 type="text"
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder="Paste a YouTube URL..."
+                placeholder="Paste a YouTube or Bilibili URL..."
                 className="flex-1 px-1 py-2.5 bg-transparent text-foreground placeholder:text-muted/50 outline-none text-sm"
                 disabled={loading}
               />
@@ -107,10 +115,6 @@ export default function HomePage() {
               </button>
             </div>
           </form>
-
-          {error && (
-            <p className="mt-4 text-accent text-sm animate-fade-in">{error}</p>
-          )}
         </div>
       </section>
 
