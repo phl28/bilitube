@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, use } from 'react';
+import { detectCommentLanguage } from '@/lib/comment-language';
 import { VideoMatch, YouTubeComment, BilibiliComment } from '@/types';
 
 interface VideoPageProps {
@@ -536,6 +537,11 @@ function SingleComment({
   const isYouTube = platform === 'youtube';
   const ytComment = isYouTube ? (comment as YouTubeComment) : null;
   const biliComment = !isYouTube ? (comment as BilibiliComment) : null;
+  const originalText = isYouTube ? ytComment!.textOriginal : biliComment!.message;
+  const detectedLanguage = detectCommentLanguage(originalText);
+  const sourceLanguage = detectedLanguage ?? (isYouTube ? 'en' : 'zh');
+  const targetLang = sourceLanguage === 'zh' ? 'en' : 'zh';
+  const translateButtonLabel = targetLang === 'zh' ? 'Show Chinese' : 'Show English';
 
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -557,21 +563,10 @@ function SingleComment({
     setTranslationError(false);
 
     try {
-      let textToTranslate = '';
-      let targetLang = '';
-
-      if (isYouTube) {
-        textToTranslate = ytComment!.textOriginal;
-        targetLang = 'zh';
-      } else {
-        textToTranslate = biliComment!.message;
-        targetLang = 'en';
-      }
-
       const res = await fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToTranslate, targetLang }),
+        body: JSON.stringify({ text: originalText, targetLang }),
       });
       const data = await res.json();
 
@@ -628,7 +623,7 @@ function SingleComment({
               disabled={isTranslating}
               className="hover:text-foreground transition-colors disabled:opacity-50"
             >
-              {isTranslating ? 'Translating...' : showTranslation ? 'Show original' : isYouTube ? 'Show Chinese' : 'Show English'}
+              {isTranslating ? 'Translating...' : showTranslation ? 'Show original' : translateButtonLabel}
             </button>
             {translationError && <span className="text-red-500">Translation failed</span>}
           </div>

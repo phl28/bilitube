@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'crypto';
 import { getCommentTranslation, saveCommentTranslation } from '@/lib/db';
+import { detectCommentLanguage, type TranslationLanguage } from '@/lib/comment-language';
 
-export type TranslationLanguage = 'en' | 'zh';
+export type { TranslationLanguage } from '@/lib/comment-language';
 
 export interface TranslationResult {
   translatedText: string;
@@ -28,23 +29,6 @@ function getTranslationCacheText(text: string): string {
 
 export function getTranslationTextHash(text: string): string {
   return createHash('sha256').update(text).digest('hex');
-}
-
-export function detectCommentLanguage(text: string): TranslationLanguage | null {
-  const normalized = normalizeTranslationText(text);
-
-  if (!normalized) {
-    return null;
-  }
-
-  const chineseChars = normalized.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g)?.length ?? 0;
-  const latinChars = normalized.match(/[A-Za-z]/g)?.length ?? 0;
-
-  if (chineseChars === 0 && latinChars === 0) {
-    return null;
-  }
-
-  return chineseChars > latinChars ? 'zh' : 'en';
 }
 
 export async function translateCommentText(input: {
